@@ -19,3 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## License
+
+This software is licensed under the MIT License. However, please note that this project uses [Npcap](https://npcap.com), a proprietary packet capture and injection library.
+
+### Npcap Usage
+
+This software requires Npcap to function. Npcap is free for personal and limited commercial use on up to five systems. For more than five systems, or for redistribution, a [Npcap OEM License](https://npcap.com/oem/) is required. Users will need to download and install Npcap manually from [Npcap's website](https://npcap.com/#download).
+
+Please refer to the [Npcap license](https://github.com/nmap/npcap/blob/master/LICENSE) for more details.
+

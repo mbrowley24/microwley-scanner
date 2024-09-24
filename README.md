@@ -1,2 +1,2 @@
 # microwley-scanner
-Packet Analyzer for the average joe!
+Packet Analyzer for the average Joe!

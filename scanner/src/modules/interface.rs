@@ -1,7 +1,9 @@
 use crate::menu::{
   self,
   clear_terminal,
-  parse_string_to_num_u32  
+  input_validation_digit,
+  parse_string_to_num_u32,  
+  previous_menu,
 };
 use pnet::{
     datalink::{self, 
@@ -43,7 +45,7 @@ impl Interface{
 
             Ok(CEthernet(tx, rx)) => (tx, rx), 
             Ok(_) => panic!("unhandled channel"),
-            Err(e) => panic!("failed to create channel: {}", e)
+            Err(e) => panic!("failed to create channel: {:?}", e)
         }; 
 
         
@@ -59,13 +61,14 @@ impl Interface{
     pub fn capture(&mut self, filter : filter::Filter){
         
         loop{
-
+            println!("capturing");
             match self.rx.next(){
                 
                 Ok(packet) =>{
 
                     if let Some (eth_packet) = filter.layer2_protocol(packet){
-
+                        
+                        println!("{:?}", eth_packet);
                     }
 
                     
@@ -82,7 +85,109 @@ impl Interface{
 
 
 
+
+
+
 //Interface functions
+pub fn interface_menu(menu : &mut String) -> Option<Interface>{
+
+    let interfaces: Vec<NetworkInterface> = get_interfaces();
+    
+    let interface_opt: Vec<String> = interface_menu_opt(&interfaces);    
+    
+    let mut invalid_char: bool = false;
+
+    let mut option: String = String::new();
+
+    let mut idx : usize = 0;
+
+    loop{
+
+        
+        interface_menu_text(&interface_opt, &mut option, &invalid_char);
+
+        //check if user wants to return to previouos menu
+        previous_menu(&option, menu); 
+    
+        
+                
+        //validate user input
+        //user input must be a digit 
+        input_validation_digit(&option, &mut invalid_char);                          
+        
+        
+
+        if invalid_char == true{
+            option.clear();
+            //eprintln!("Please make a valid input");
+            clear_terminal();
+            continue;
+        }
+
+        //convert string to usize for interface index
+        idx  = parse_string_to_num_u32(&option) as usize;
+
+        //convert capture_opt into an u32 iace_idx if there is an error change invalid_char to true
+        if invalid_char == true{
+            option.clear();
+            clear_terminal();
+            continue;
+        }
+
+        //check if the an interace exsists for the value the user provided
+        let iface_valid: bool  = check_iface_idx_valid(&interfaces, &idx); 
+        
+        if iface_valid == false {
+            eprintln!("Invalid index entered");
+            invalid_char  = true;
+            option.clear();
+            clear_terminal();
+            continue;
+        
+        }else{
+            break;
+        }
+        
+    }
+    
+    match iface_opt(interfaces, idx){
+
+        Some(net_iface) => Some(Interface::new(net_iface)),
+
+        None => None 
+    }
+
+
+}
+
+pub fn interface_menu_text(interfaces : &Vec<String>,
+                                input: &mut String,
+                                invalid_char : &bool){
+
+    println!("                        Microwley-scanner: Packet Capture");
+    println!("                        ---------------------------------");
+    println!("");
+    println!("Index   Name        MAC Addr           Active    IPv4         IPv6 -> Link-Local");
+    println!("----------------------------------------------------------------------------------------------");
+    for iface in interfaces.iter(){
+        println!("{}", iface);
+        println!("----------------------------------------------------------------------------------------------")
+    }
+    println!("");
+    println!("E-> Back to main menu");
+    println!("");
+    if *invalid_char{
+        println!("Please choose a valid Index");
+        println!("");
+    }
+    print!("Enter a valid index ->");
+    io::stdout().flush().unwrap();
+    io::stdin().read_line(input)
+    .expect("Error reading input");
+
+    clear_terminal();
+    
+}
 
 
 pub fn convert_interface_idx_input(input : &str, idx : &mut usize, is_valid : &mut bool){
@@ -98,6 +203,7 @@ pub fn convert_interface_idx_input(input : &str, idx : &mut usize, is_valid : &m
     }
 
     *idx = value as usize;
+
 }
 
 
@@ -138,6 +244,10 @@ pub fn interface_to_string(iface: &NetworkInterface) -> String{
 
     format!("  {index}  |  {name} {spacer} | {mac} |  {status}  |   {ipv4}  |  {ipv6}", name = name, spacer= spacer, status = status, mac = mac_add, ipv4=ipv4, ipv6=ipv6)   
 }
+
+
+
+
 
 
 //convert many interfaces data in to string for menu
@@ -261,34 +371,6 @@ fn get_of_iface_name(name: &str) -> String{
 
 
 
-pub fn interface_menu(interfaces : &Vec<String>,
-                                input: &mut String,
-                                invalid_char : &bool){
-
-    println!("                        Microwley-scanner: Packet Capture");
-    println!("                        ---------------------------------");
-    println!("");
-    println!("Index   Name        MAC Addr           Active    IPv4         IPv6 -> Link-Local");
-    println!("----------------------------------------------------------------------------------------------");
-    for iface in interfaces.iter(){
-        println!("{}", iface);
-        println!("----------------------------------------------------------------------------------------------")
-    }
-    println!("");
-    println!("E-> Back to main menu");
-    println!("");
-    if *invalid_char{
-        println!("Please choose a valid Index");
-        println!("");
-    }
-    print!("Enter a valid index ->");
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(input)
-    .expect("Error reading input");
-
-    clear_terminal();
-    
-}
 
 
 

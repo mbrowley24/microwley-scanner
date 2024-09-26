@@ -24,6 +24,48 @@ use pnet::{
 use regex::Regex;
 
 
+pub struct Menu{
+    to_blue : String,
+    to_bold : String,
+    to_green : String,
+    to_red : String,
+    text : String,
+    start : String,
+    end : String,
+    reset: String,
+    underline : String,
+    white : String,
+    yellow : String,
+    
+}
+
+//ToDO creating a standard for displaying text. Will work on this 
+//once app is functional
+impl Menu {
+
+    pub fn new(text : String) -> Self{
+
+        Self{   to_blue : String::from("94"),
+                to_bold: String::from("1"),
+                to_green : String::from("92"),
+                to_red: String::from("91"), 
+                text: String::from(text),
+                start : String::from("\033["), 
+                end : String::from("m"),
+                reset : String::from("\033[0m"),
+                underline: String::from("4"), 
+                white: String::from("97"), 
+                yellow: String::from("93") 
+            }
+
+    }
+
+    pub fn display(&self){
+
+        println!("{}{}{}", self.white, self.text, self.end)
+    } 
+}
+
 
 
 fn clap_set_up() -> ArgMatches{
@@ -152,9 +194,7 @@ fn menu_set_up(input : &mut String){
      println!("3: Exit Program ");
      println!("");
      print!("Make a selection -> ");
-     io::stdout().flush().unwrap();
-     io::stdin().read_line(input)
-        .expect("Error reading customer input");
+    user_input(input);
 
 }
 

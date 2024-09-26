@@ -214,7 +214,7 @@ impl Filter{
 
 } 
 //Filter menu
-pub fn filter_menu() -> Filter{
+pub fn filter_menu() -> Option<Filter>{
 
     //check if ip is IPv4 or ipv6
     let mut ipv4 = false;
@@ -239,7 +239,7 @@ pub fn filter_menu() -> Filter{
 
     
 
-     Filter::new()
+     Some(Filter::new())
 }
 
 

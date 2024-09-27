@@ -1,5 +1,5 @@
 # Microwley-Scanner
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=flat&logo=linkedin)]([https://www.linkedin.com/in/your-linkedin-username](https://www.linkedin.com/in/michael-browley-392557b1/))
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=flat&logo=linkedin)](https://www.linkedin.com/in/michael-browley-392557b1/)
 
 
 Welcome to Microwley-Scanner, a packet analysis tool designed for the everyday IT professional! As a network engineer, I was challenged to quickly capture and analyze network traffic to troubleshoot security and network issues effectively. 

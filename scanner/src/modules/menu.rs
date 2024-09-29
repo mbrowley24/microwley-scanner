@@ -1,26 +1,15 @@
-use clap::{Arg, ArgMatches ,Command, Error};
-use pnet::datalink::NetworkInterface;
-use crate::modules::{
-    interface,
-    packet_capture::packet_capture,
-};
+use chrono::{DateTime, Local};
+use clap::{Arg, ArgMatches ,Command};
+use crate::modules::packet_capture::packet_capture;
 
-use std::iter;
+
 use std::{
-    io::{self, Write, stdin, stdout},
+    io::{Write, stdin, stdout},
     num::ParseIntError,
     convert::TryFrom,
+    time::SystemTime,
 };
-use pnet::{
-    datalink::{self, 
-        Channel::Ethernet,
-        EtherType,
-    },
-    packet::ethernet::{
-        EthernetPacket,
-        EtherTypes,
-    }
-};
+
 use regex::Regex;
 
 
@@ -104,6 +93,11 @@ pub fn convert_to_u16(value : u32) -> u16{
 
 }
 
+pub fn crusor_to_top_left(){
+
+    print!("\x1B[2J\x1B[H");
+}
+
 fn guided_mode(cmd : &mut String){
    let mut test_string = String::new();
     
@@ -111,7 +105,7 @@ fn guided_mode(cmd : &mut String){
 }
 
 //user validation check for user selecting an interface
-pub fn input_validation_digit(input_opt : &String, invalid : &mut bool){
+pub fn input_validation_digit(input_opt : &str, is_valid : &mut bool){
     
     //check for digits only
     let re = Regex::new(r"^\d$").unwrap();    
@@ -122,14 +116,29 @@ pub fn input_validation_digit(input_opt : &String, invalid : &mut bool){
     
     //check if input is a digit
     if re.is_match(input_opt.trim()){
-        *invalid = false;
+        *is_valid = true;
     
     }else{
 
-        *invalid = true;
+        *is_valid = false;
     }
 
 
+}
+
+pub fn input_validation_digit_range(input : &str, is_valid : &mut bool){
+
+    let range  = input.split("-");
+
+    for value in range{
+        
+        input_validation_digit(value, is_valid);
+        
+        if *is_valid == false{
+
+            break;
+        }
+    }
 }
 
 pub fn master_menu(){
@@ -248,6 +257,17 @@ pub fn parse_string_to_num_u32(option : &str) -> u32{
             }
         }    
 }
+
+
+pub fn time_now()  -> String{
+
+    let system_time = SystemTime::now();
+
+    let datetime : DateTime<Local> =  system_time.into();
+
+    datetime.format("%Y-%m-%d %H:%M:%S.%3f").to_string()
+}
+
 
 pub fn user_input(input :&mut String){
 

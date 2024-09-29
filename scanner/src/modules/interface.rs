@@ -1,34 +1,35 @@
+use crate::modules::filter::Filter as packet_filter;
 use crate::menu::{
-  self,
   clear_terminal,
+  crusor_to_top_left,
   input_validation_digit,
   parse_string_to_num_u32,  
   previous_menu,
+  time_now,
 };
 use pnet::{
-    datalink::{self, 
-        Channel::Ethernet as CEthernet,
-        EtherType,
-        MacAddr, 
-        NetworkInterface,
-        DataLinkReceiver,
-        DataLinkSender,
+    datalink::{self, Channel::Ethernet as CEthernet, DataLinkReceiver, DataLinkSender, MacAddr, NetworkInterface
     },
     ipnetwork::IpNetwork, 
     packet::{
-        ip, ipv4::{self, Ipv4Packet}, ipv6::{self, Ipv6Packet}
+        self,
+        ethernet::{EtherTypes, EthernetPacket},
+        ip::{self, IpNextHeaderProtocols},
+        ipv4::{self, Ipv4Packet}, 
+        ipv6::{self, Ipv6Packet}, 
+        tcp::TcpPacket, 
+        udp::UdpPacket, Packet,
     }
 };
 
 use std::{
-    io::{self, Write},
-    num::ParseIntError
+    io::{self, Write}, iter::Filter, num::ParseIntError, time
 };
 use regex::Regex;
 
 
 
-use super::filter;
+// use super::filter;
 
 pub struct Interface{
     iface : NetworkInterface,
@@ -58,34 +59,178 @@ impl Interface{
     }
 
 
-    pub fn capture(&mut self, filter : filter::Filter){
+    pub fn capture(&mut self, packet_filter : packet_filter){
+        crusor_to_top_left();
+        println!("[Timestamp]   [protocol]   [Source IP:port]  -->    [Destination IP: Port] [Packet Size]  [Flags]");        
         
         loop{
-            println!("capturing");
+            
             match self.rx.next(){
                 
                 Ok(packet) =>{
-
-                    if let Some (eth_packet) = filter.layer2_protocol(packet){
-                        
-                        println!("{:?}", eth_packet);
-                    }
-
+                
+                    capture_flow(packet,  &packet_filter);
                     
                 }
 
-                Err(e) => eprintln!("Failed to capture packets: {}", e),
+                Err(e) => eprintln!("Failed to capture packets: {}", e)
             }     
-
 
         }
     }
 }
 
 
+fn capture_flow(packet: &[u8], filter : &packet_filter){
+
+    if let Some(frame) = EthernetPacket::new(packet){
+
+          match frame.get_ethertype(){
+
+            EtherTypes::Ipv4 => capture_flow_ipv4(frame, &filter),
+
+            EtherTypes::Ipv6 => capture_flow_ipv6(frame),
+        
+            EtherTypes::Arp => capture_flow_arp(),
+
+            EtherTypes::Vlan => capture_flow_vlan(),
+
+            EtherTypes::Lldp => capture_flow_lldp(),
+            
+            EtherTypes::QinQ => capture_q_n_q(),
+
+            _ => {
+                capture_flow_layer2(frame);
+            }
+        }
+    }
+}
+
+fn capture_flow_layer2(frame : EthernetPacket){
+
+    println!("{} MAC {} --> {}   ",
+                time_now(),
+                frame.get_source(),
+                frame.get_destination()
+            )
+    
+}
+
+fn capture_flow_ipv4(frame: EthernetPacket, filter : &packet_filter){
+
+    if let Some(packet) = Ipv4Packet::new(frame.payload()){
+
+        if filter.ipv4 == false{
+        
+            
+        
+        }
+
+        match packet.get_next_level_protocol() {
+
+            IpNextHeaderProtocols::Tcp => capture_flow_tcp_ipv4(packet),
+
+            IpNextHeaderProtocols::Udp => capture_flow_udp_ipv4(packet),
+
+            _=>println!("")    
+        }
+
+    }
+}
 
 
+fn capture_flow_ipv6(frame : EthernetPacket){
 
+    if let Some(segment) = Ipv6Packet::new(frame.payload()){
+        
+        match segment.get_next_header() {
+
+            IpNextHeaderProtocols::Tcp => capture_flow_tcp_ipv6(segment),
+
+            IpNextHeaderProtocols::Udp => capture_flow_udp_ipv6(segment),
+
+            _=>println!("")    
+        }
+    }
+    
+    
+}
+
+
+fn capture_flow_tcp_ipv4(packet : Ipv4Packet){
+
+    if let Some(segment) = TcpPacket::new(packet.payload()){
+
+
+        println!("{} TCP {}:{} --> {}:{}   {}   {} ",
+                time_now(),
+                packet.get_source(),
+                segment.get_destination(),
+                packet.get_destination(),
+                segment.get_destination(),
+                packet.get_total_length(),
+                segment.get_flags()
+                )
+
+    }
+}
+
+fn capture_flow_tcp_ipv6(packet : Ipv6Packet){
+
+    if let Some(segment) = TcpPacket::new(packet.payload()){
+        
+        println!("{} TCP {}:{} --> {}:{}   {}   {} ",
+                time_now(),
+                packet.get_source(),
+                segment.get_destination(),
+                packet.get_destination(),
+                segment.get_destination(),
+                packet.get_payload_length(),
+                segment.get_flags()
+                ) 
+    }
+}
+
+fn capture_flow_udp_ipv4(packet : Ipv4Packet){
+
+    if let Some(segment) = UdpPacket::new(packet.payload()){
+
+        println!("{} TCP {}:{} --> {}:{}   {}   ",
+                time_now(),
+                packet.get_source(),
+                segment.get_destination(),
+                packet.get_destination(),
+                segment.get_destination(),
+                packet.get_total_length(),
+                
+                )
+    }
+}
+
+fn capture_flow_udp_ipv6(packet : Ipv6Packet){
+
+    if let Some(segment) = UdpPacket::new(packet.payload()){
+
+        println!("{} TCP {}:{} --> {}:{}   {}   ",
+                time_now(),
+                packet.get_source(),
+                segment.get_destination(),
+                packet.get_destination(),
+                segment.get_destination(),
+                packet.get_payload_length(),
+                
+                )
+    }
+}
+
+
+fn capture_flow_arp(){}
+
+fn capture_flow_vlan(){}
+
+fn capture_flow_lldp(){}
+
+fn capture_q_n_q(){}
 
 
 //Interface functions
@@ -95,7 +240,7 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
     
     let interface_opt: Vec<String> = interface_menu_opt(&interfaces);    
     
-    let mut invalid_char: bool = false;
+    let mut is_valid: bool = false;
 
     let mut option: String = String::new();
 
@@ -104,7 +249,7 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
     loop{
 
         
-        interface_menu_text(&interface_opt, &mut option, &invalid_char);
+        interface_menu_text(&interface_opt, &mut option, &is_valid);
 
         //check if user wants to return to previouos menu
         previous_menu(&option, menu); 
@@ -113,11 +258,11 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
                 
         //validate user input
         //user input must be a digit 
-        input_validation_digit(&option, &mut invalid_char);                          
+        input_validation_digit(&option, &mut is_valid);                          
         
         
 
-        if invalid_char == true{
+        if is_valid == false{
             option.clear();
             //eprintln!("Please make a valid input");
             clear_terminal();
@@ -127,19 +272,13 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
         //convert string to usize for interface index
         idx  = parse_string_to_num_u32(&option) as usize;
 
-        //convert capture_opt into an u32 iace_idx if there is an error change invalid_char to true
-        if invalid_char == true{
-            option.clear();
-            clear_terminal();
-            continue;
-        }
 
         //check if the an interace exsists for the value the user provided
         let iface_valid: bool  = check_iface_idx_valid(&interfaces, &idx); 
         
         if iface_valid == false {
             eprintln!("Invalid index entered");
-            invalid_char  = true;
+            is_valid  = false;
             option.clear();
             clear_terminal();
             continue;

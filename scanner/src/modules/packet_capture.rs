@@ -8,9 +8,6 @@ use crate::modules::{
 };
 use::pnet::datalink::NetworkInterface;
 
-use std::io::{self, Write};
-
-use super::menu::clear_terminal;
 
 
 
@@ -19,15 +16,14 @@ pub fn packet_capture(menu: &mut String){
     //Pakcet capture main menu returns and interface
     let iface_option: Option<Interface> = interface::interface_menu(menu);
 
+    let mut traffic_filter = Filter::new();
+
+    traffic_filter.filter_ip_version_menu();
+
+    traffic_filter.source_ip_menu();
 
 
-    let traffic_filter: Filter  = match filter::filter_menu(){
-
-        Some(filter) => filter,
-        
-        None => Filter::new()
-        
-    };
+   
 
     println!("up till here");
 

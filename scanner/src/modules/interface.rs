@@ -5,6 +5,7 @@ use crate::menu::{
   input_validation_digit,
   parse_string_to_num_u32,  
   previous_menu,
+  spacer_size,
   time_now,
 };
 use pnet::{
@@ -61,7 +62,14 @@ impl Interface{
 
     pub fn capture(&mut self, packet_filter : packet_filter){
         crusor_to_top_left();
-        println!("[Timestamp]   [protocol]   [Source IP:port]  -->    [Destination IP: Port] [Packet Size]  [Flags]");        
+        println!("[Timestamp]{}[protocol]{}[Source IP:port]{}-->{}[Destination IP: Port]{}[Packet Size]{}[Flags]",
+            spacer_size(15),
+            spacer_size(5),
+            spacer_size(5),
+            spacer_size(5),
+            spacer_size(5),
+            spacer_size(5)
+        );        
         
         loop{
             
@@ -69,7 +77,7 @@ impl Interface{
                 
                 Ok(packet) =>{
                 
-                    capture_flow(packet,  &packet_filter);
+                    packet_filter.capture_flow(packet);
                     
                 }
 
@@ -81,147 +89,41 @@ impl Interface{
 }
 
 
-fn capture_flow(packet: &[u8], filter : &packet_filter){
+// fn capture_flow(packet: &[u8], filter : &packet_filter){
 
-    if let Some(frame) = EthernetPacket::new(packet){
+//     if let Some(frame) = EthernetPacket::new(packet){
 
-          match frame.get_ethertype(){
+//           match frame.get_ethertype(){
 
-            EtherTypes::Ipv4 => capture_flow_ipv4(frame, &filter),
+//             EtherTypes::Ipv4 => capture_flow_ipv4(frame, &filter),
 
-            EtherTypes::Ipv6 => capture_flow_ipv6(frame),
+//             EtherTypes::Ipv6 => capture_flow_ipv6(frame),
         
-            EtherTypes::Arp => capture_flow_arp(),
+//             EtherTypes::Arp => capture_flow_arp(),
 
-            EtherTypes::Vlan => capture_flow_vlan(),
+//             EtherTypes::Vlan => capture_flow_vlan(),
 
-            EtherTypes::Lldp => capture_flow_lldp(),
+//             EtherTypes::Lldp => capture_flow_lldp(),
             
-            EtherTypes::QinQ => capture_q_n_q(),
+//             EtherTypes::QinQ => capture_q_n_q(),
 
-            _ => {
-                capture_flow_layer2(frame);
-            }
-        }
-    }
-}
-
-fn capture_flow_layer2(frame : EthernetPacket){
-
-    println!("{} MAC {} --> {}   ",
-                time_now(),
-                frame.get_source(),
-                frame.get_destination()
-            )
-    
-}
-
-fn capture_flow_ipv4(frame: EthernetPacket, filter : &packet_filter){
-
-    if let Some(packet) = Ipv4Packet::new(frame.payload()){
-
-        if filter.ipv4 == false{
-        
-            
-        
-        }
-
-        match packet.get_next_level_protocol() {
-
-            IpNextHeaderProtocols::Tcp => capture_flow_tcp_ipv4(packet),
-
-            IpNextHeaderProtocols::Udp => capture_flow_udp_ipv4(packet),
-
-            _=>println!("")    
-        }
-
-    }
-}
+//             _ => {
+//                 capture_flow_layer2(frame);
+//             }
+//         }
+//     }
+// }
 
 
-fn capture_flow_ipv6(frame : EthernetPacket){
-
-    if let Some(segment) = Ipv6Packet::new(frame.payload()){
-        
-        match segment.get_next_header() {
-
-            IpNextHeaderProtocols::Tcp => capture_flow_tcp_ipv6(segment),
-
-            IpNextHeaderProtocols::Udp => capture_flow_udp_ipv6(segment),
-
-            _=>println!("")    
-        }
-    }
-    
-    
-}
 
 
-fn capture_flow_tcp_ipv4(packet : Ipv4Packet){
-
-    if let Some(segment) = TcpPacket::new(packet.payload()){
 
 
-        println!("{} TCP {}:{} --> {}:{}   {}   {} ",
-                time_now(),
-                packet.get_source(),
-                segment.get_destination(),
-                packet.get_destination(),
-                segment.get_destination(),
-                packet.get_total_length(),
-                segment.get_flags()
-                )
 
-    }
-}
 
-fn capture_flow_tcp_ipv6(packet : Ipv6Packet){
 
-    if let Some(segment) = TcpPacket::new(packet.payload()){
-        
-        println!("{} TCP {}:{} --> {}:{}   {}   {} ",
-                time_now(),
-                packet.get_source(),
-                segment.get_destination(),
-                packet.get_destination(),
-                segment.get_destination(),
-                packet.get_payload_length(),
-                segment.get_flags()
-                ) 
-    }
-}
 
-fn capture_flow_udp_ipv4(packet : Ipv4Packet){
 
-    if let Some(segment) = UdpPacket::new(packet.payload()){
-
-        println!("{} TCP {}:{} --> {}:{}   {}   ",
-                time_now(),
-                packet.get_source(),
-                segment.get_destination(),
-                packet.get_destination(),
-                segment.get_destination(),
-                packet.get_total_length(),
-                
-                )
-    }
-}
-
-fn capture_flow_udp_ipv6(packet : Ipv6Packet){
-
-    if let Some(segment) = UdpPacket::new(packet.payload()){
-
-        println!("{} TCP {}:{} --> {}:{}   {}   ",
-                time_now(),
-                packet.get_source(),
-                segment.get_destination(),
-                packet.get_destination(),
-                segment.get_destination(),
-                packet.get_payload_length(),
-                
-                )
-    }
-}
 
 
 fn capture_flow_arp(){}

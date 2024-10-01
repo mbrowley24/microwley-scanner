@@ -39,9 +39,9 @@ impl Menu {
                 to_green : String::from("92"),
                 to_red: String::from("91"), 
                 text: String::from(text),
-                start : String::from("\033["), 
+                start : String::from("\x1b["), 
                 end : String::from("m"),
-                reset : String::from("\033[0m"),
+                reset : String::from("\x1b[0m"),
                 underline: String::from("4"), 
                 white: String::from("97"), 
                 yellow: String::from("93") 
@@ -258,6 +258,18 @@ pub fn parse_string_to_num_u32(option : &str) -> u32{
         }    
 }
 
+pub fn spacer_size(num_spaces : usize) -> String{
+
+    let mut spacer = String::new();
+
+    for i in 0..num_spaces{
+
+        spacer.push_str(" ");
+    }
+
+    spacer
+    
+}
 
 pub fn time_now()  -> String{
 

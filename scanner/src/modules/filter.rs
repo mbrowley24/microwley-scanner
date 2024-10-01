@@ -7,22 +7,47 @@ use crate::modules::menu::{
     parse_string_to_num_u32, 
     parse_string_to_num_selection_u16, 
     user_input,
+    spacer_size,
+    time_now
+    
 };
-// use pnet::{
-//     packet::{
-//         ethernet::{ 
-//             EtherTypes, 
-//             EthernetPacket
-//         }, 
-//         icmp::IcmpPacket,
-//         icmpv6::Icmpv6Packet, 
-//         ipv4::Ipv4Packet, 
-//         ipv6::Ipv6Packet, 
-//         tcp::{ipv4_checksum, TcpPacket}, 
-//         udp::UdpPacket,
-//         Packet
-//     },
-// };
+use pnet::packet::{
+            ethernet::{ 
+                EtherTypes, 
+                EthernetPacket
+            }, icmp::{
+                    IcmpCode,
+                    IcmpPacket,
+                    IcmpTypes::{
+                        self,
+                        AddressMaskReply,
+                        AddressMaskRequest,
+                        DestinationUnreachable,
+                        EchoReply,
+                        EchoRequest,
+                        ParameterProblem,
+                        RedirectMessage,
+                        RouterAdvertisement,
+                        RouterSolicitation,
+                        TimeExceeded,
+                        Timestamp,
+                        TimestampReply,
+                    },
+
+            }, 
+            icmpv6::{ndp::Redirect, Icmpv6Packet}, ip::{IpNextHeaderProtocol, IpNextHeaderProtocols}, ipv4::Ipv4Packet, ipv6::Ipv6Packet, tcp::{
+                ipv4_checksum, TcpFlags::{
+                    ACK,
+                    CWR,
+                    FIN,
+                    PSH,
+                    RST,
+                    SYN,
+                    URG
+                }, TcpPacket
+            }, udp::UdpPacket, Packet
+    };
+
 use regex::Regex;
 // use std::io::{stdin, stdout, Write};
 
@@ -88,8 +113,20 @@ impl Filter{
      
     }
 
-    //menus for the filter struct
-    
+    //Ethernet type to string
+    pub fn ether_type_to_text(&mut self, frame: EthernetPacket) -> String{
+
+
+        match frame.get_ethertype(){
+
+            EtherTypes::Arp => String::from("ARP"),
+            EtherTypes::Ipv4 => String::from("IPv4"),
+            EtherTypes::Ipv6 => String::from("IPv6"),
+            EtherTypes::Lldp => String::from("LLDP"),
+            _ =>  String::from("")
+        }   
+        
+    }
     //Filter IP version
     pub fn filter_ip_version_menu(&mut self){
 
@@ -120,6 +157,34 @@ impl Filter{
         
         clear_terminal();
     }
+
+    fn icmp_type_display_string(&mut self, packet: &IcmpPacket, message : String) -> String{
+        format!("ICMP Code: {:?} ({})", packet.get_icmp_code(), message)
+    }
+
+
+    //To Do pick up here
+    // fn icmp_type(&self, packet : &IcmpPacket) -> [String; 2]{
+    //     let mut type_code = [String::new(), String::new()];
+    //     match packet.get_icmp_type(){
+    //
+    //         EchoReply =>{
+    //             type_code[0] =format!("ICMP Type: {:?} (Echo Reply)", packet.get_icmp_type());
+    //         },
+    //         EchoRequest => format!("ICMP Type: {:?} (Echo Request)", packet.get_icmp_type()),
+    //         DestinationUnreachable => format!("ICMP Type: {:?}(Destination Unreachable)", packet.get_icmp_type()),
+    //         RedirectMessage => format!("ICMP Type: {:?} (Redirect)", packet.get_icmp_type()),
+    //         RouterAdvertisement => format!("ICMP Type: {:?} (Router AdvertisementRouter)", packet.get_icmp_type()),
+    //         RouterSolicitation => format!("ICMP Type: {:?} (Router Solicitation)", packet.get_icmp_type()),
+    //         TimeExceeded => format!("ICMP Type: {:?} (Time Exceeded)", packet.get_icmp_type()),
+    //         ParameterProblem => format!("ICMP Type: {:?} (Parameter Problem)", packet.get_icmp_type()),
+    //         Timestamp => format!("ICMP Type: {:?} (Timestamp)", packet.get_icmp_type()),
+    //         TimestampReply => format!("ICMP Type: {:?} (Timestamp Reply)", packet.get_icmp_type()),
+    //         AddressMaskRequest => format!("ICMP Type: {:?} (Address Mask Request)", packet.get_icmp_type()),
+    //         AddressMaskReply => format!("ICMP Type: {:?} (Address Mask Reply)", packet.get_icmp_type()),
+    //         _=> String::new()
+    //     }
+    // }
 
 
     fn reset_ip_filter(&mut self){
@@ -183,7 +248,7 @@ impl Filter{
             print!("Source IP (all)-> ");
             
             if is_valid == false{
-
+ 
                 clear_terminal();
                 input.clear();
                 println!("Enter a valid source IPv4");
@@ -585,6 +650,330 @@ impl Filter{
         
     }
 
+    fn capture_screen_print(){
+
+    }
+    pub fn capture_flow(&self, packet: &[u8]){
+        if let Some(frame) = EthernetPacket::new(packet){
+
+            self.capture_flow_layer2(&frame);
+
+            match frame.get_ethertype(){
+
+                EtherTypes::Ipv4 =>{ 
+                    if self.ipv4 == true{
+                        return
+                    }
+
+                    self.capture_flow_ipv4(&frame)
+                },
+
+                EtherTypes::Ipv6 =>{
+                    if self.ipv6 == true{
+                        return 
+                    }
+
+                    self.capture_flow_ipv6(&frame)
+                },
+            
+                // EtherTypes::Arp => capture_flow_arp(),
+
+                // EtherTypes::Vlan => capture_flow_vlan(),
+
+                // EtherTypes::Lldp => capture_flow_lldp(),
+                
+                // EtherTypes::QinQ => capture_q_n_q(),
+
+                _ => {}
+            }
+        }
+    }
+
+    fn layer2_source_transmission(&self, frame : &EthernetPacket) -> String {        
+        
+        if frame.get_source().is_broadcast() == true{
+
+            String::from("Broadcast")
+
+        }else if frame.get_source().is_multicast(){
+
+            String::from("Multicast")
+
+        }else if frame.get_source().is_unicast() == true{
+
+            String::from("Unicast")
+        
+        }else{
+            String::from("")
+        }
+
+
+    }
+
+
+    fn layer2_source_destination(&self, frame : &EthernetPacket) -> String{
+
+        if frame.get_source().is_broadcast() == true{
+
+            String::from("Broadcast")
+
+        }else if frame.get_source().is_multicast(){
+
+            String::from("Multicast")
+
+        }else if frame.get_source().is_unicast() == true{
+
+            String::from("Unicast")
+        
+        }else{
+            String::from("")
+        }
+    }
+
+    
+
+    fn capture_flow_layer2(&self, frame : &EthernetPacket){
+
+        
+        println!("\x1b[1m-------------------------------------------------------\x1b[0m");
+        println!("");
+        println!("\x1b[91;1mEthernet II:\x1b[0m");
+        println!("Timestamp: {}", time_now());
+        println!("\x1b[1mSrc:\x1b[0m {} ({})", frame.get_source(), self.layer2_source_transmission(frame));
+        println!("\x1b[1mDST:\x1b[0m {} ({})", frame.get_destination(), self.layer2_source_destination(frame));
+        println!("\x1b[1mType:\x1b[0m {}", frame.get_ethertype());
+        println!("");
+    
+    }
+
+    fn capture_flow_ipv4(&self, frame: &EthernetPacket){
+
+        
+        self.capture_flow_layer2(frame);
+
+        if let Some(packet) = Ipv4Packet::new(frame.payload()){
+
+                
+            match packet.get_next_level_protocol() {
+
+                IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv4(packet),
+
+                IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv4(packet),
+                
+                IpNextHeaderProtocols::Icmp => self.capture_icmp_ipv4(packet),
+
+            _=> println!("")
+                
+            }
+
+        }
+    }
+
+    fn capture_icmp_ipv4(&self, packet : Ipv4Packet ){
+
+        if let Some(icmp) = IcmpPacket::new(packet.payload()){
+
+            println!("ICMP");
+            println!("Type: {:?}", icmp.get_icmp_type());
+            println!("Code: {:?}", icmp.get_icmp_code());
+            println!("{}", icmp.);
+        }
+    }
+
+    fn capture_flow_tcp_ipv4(&self, packet : Ipv4Packet){
+
+        if let Some(segment) = TcpPacket::new(packet.payload()){
+
+
+            println!("");            
+            println!("\x1b[91;1mInternet Protocol Version 4:\x1b[0m");
+            println!("\x1b[1mVersion\x1b[0m: 4");
+            println!("\x1b[1mHeader Length\x1b[0m: {}", packet.get_header_length());
+            println!("\x1b[1mTotal Length\x1b[0m: {}", packet.get_total_length());
+            println!("\x1b[1mTime to Live\x1b[0m: {}", packet.get_ttl());
+            println!("\x1b[1mFragment Offset\x1b[0m: {}", packet.get_fragment_offset());
+            println!("\x1b[1mProtocol\x1b[0m: {}", self.layer_4_protocol(packet.get_next_level_protocol()));
+            println!("\x1b[1mSource Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_source(), segment.get_source());
+            println!("\x1b[1mDestination Address:\x1b[0m{}:{}", packet.get_destination(), segment.get_destination());
+            println!("");
+
+            
+        }
+    }
+
+    pub fn capture_flow_udp_ipv4(&self, packet : Ipv4Packet){
+
+        if let Some(segment) = UdpPacket::new(packet.payload()){
+
+            println!("--------------------------------------------------");
+            println!("Timestamp: {}", time_now());
+            println!("Source: {}:{}", packet.get_source(), segment.get_source());
+            println!("Destination: {}:{}", packet.get_destination(), segment.get_destination());
+            println!("Length: {}", packet.get_total_length());
+            println!("");
+               
+        }
+    }
+
+
+
+    fn capture_flow_ipv6(&self, frame : &EthernetPacket){
+
+        self.capture_flow_layer2(frame);
+
+        if self.icmpv6 == false{
+
+            if let Some(segment) = Ipv6Packet::new(frame.payload()){
+            
+                match segment.get_next_header() {
+
+                    IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6(segment),
+
+                    IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6(segment),
+
+                    _=>println!("")    
+                }
+            }
+        }
+        
+    }
+
+    fn capture_flow_tcp_ipv6(&self, packet : Ipv6Packet){
+
+        if let Some(segment) = TcpPacket::new(packet.payload()){
+            
+            
+            println!("\x1b[91;1mInternet Protocol Version 6\x1b[0m"); 
+            println!("\x1b[1mVersion\x1b[0m: 6");
+            println!("\x1b[1mTraffic Class\x1b[0m: {}", packet.get_traffic_class());
+            println!("\x1b[1mFlow label\x1b[0m: {}", packet.get_flow_label());
+            println!("\x1b[1mPayload Length:\x1b[0m: {}", packet.get_payload_length());
+            println!("\x1b[1mNext Header\x1b[0m: {}", self.layer_4_protocol(packet.get_next_header()));
+            println!("\x1b[1mHop Limit:\x1b[0m {}", packet.get_hop_limit());
+            println!("\x1b[1mSource Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_source(), segment.get_source());
+            println!("\x1b[1mDestination Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_destination(), segment.get_destination());
+            println!("");
+            
+        }
+    }
+
+    fn capture_flow_udp_ipv6(&self,packet : Ipv6Packet){
+
+        
+
+        if let Some(segment) = UdpPacket::new(packet.payload()){
+
+
+            println!("\x1b[91;1mInternet Protocol Version 6\x1b[0m"); 
+            println!("\x1b[1mTraffic Class\x1b[0m: {}", packet.get_traffic_class());
+            println!("\x1b[1mFlow label\x1b[0m: {}", packet.get_flow_label());
+            println!("\x1b[1mPayload Length:\x1b[0m: {}", packet.get_payload_length());
+            println!("\x1b[1mNext Header\x1b[0m: {}", self.layer_4_protocol(packet.get_next_header()));
+            println!("\x1b[1mHop Limit:\x1b[0m {}", packet.get_hop_limit());
+            println!("\x1b[1mSource Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_source(), segment.get_source());
+            println!("\x1b[1mDestination Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_destination(), segment.get_destination());
+            println!("");
+        }
+    }
+
+    fn layer_4_protocol(&self, next_protcol : IpNextHeaderProtocol) -> String{
+
+        match next_protcol{
+
+            IpNextHeaderProtocols::Tcp => String::from("TCP"),
+            IpNextHeaderProtocols::Udp => String::from("UDP"),
+            IpNextHeaderProtocols::Icmp => String::from("ICMP"),
+            IpNextHeaderProtocols::Icmpv6 => String::from("ICMPv6"),
+            IpNextHeaderProtocols::Esp => String::from("ESP"),
+            IpNextHeaderProtocols::Ah => String::from("AH"),
+            _ => String::new()
+        }
+    }
+
+    fn tcp_flag(&self, flags: u8) ->String{
+
+        let mut flag = String::new();
+
+        if (flags & ACK) > 0{
+
+            
+            flag.push_str("ACK");
+
+
+        }else if (flags & CWR) > 0{
+
+            flag.push_str("CWR");
+
+        
+        }else if (flags & FIN) > 0 {
+
+
+            flag.push_str("FIN");
+
+
+        }else if (flags & PSH) > 0{
+
+
+            flag.push_str("PSH");
+
+
+        }else if (flags & RST) > 0 {
+
+
+            flag.push_str("RST");
+
+
+        }else if(flags & SYN) > 0{
+
+            
+            flag.push_str("SYN");
+        
+
+        }else if (flags & URG) > 0{
+
+
+            flag.push_str("URG");
+        
+
+        }else if (flags & SYN) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("SYN/ACK");
+        
+
+        }else if (flags & SYN) > 0 && (flags & FIN) > 0{
+
+
+            flag.push_str("SYN/FIN");
+
+
+        }else if (flags & FIN) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("FIN/ACK");
+        
+
+        }else if (flags & PSH) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("PSH/ACK");
+        
+
+        }else if(flags & URG) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("URG/ACK");
+        
+
+        }else if (flags & RST) > 0  && (flags & ACK) > 0{
+
+
+            flag.push_str("RST/ACK");
+        }  
+
+
+        flag
+    }
 
 } 
 

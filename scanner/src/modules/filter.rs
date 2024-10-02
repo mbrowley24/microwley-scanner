@@ -1,5 +1,5 @@
 use std::f32::consts::E;
-
+use pnet::packet;
 use crate::modules::menu::{
     clear_terminal,
     input_validation_digit,
@@ -113,6 +113,86 @@ impl Filter{
      
     }
 
+
+    pub fn capture_flow(&self, packet: &[u8]){
+        if let Some(frame) = EthernetPacket::new(packet){
+
+            self.capture_flow_layer2(&frame);
+
+            match frame.get_ethertype(){
+
+                EtherTypes::Ipv4 =>{
+                    if self.ipv4 == true{
+                        return
+                    }
+
+                    self.capture_flow_ipv4(&frame)
+                },
+
+                EtherTypes::Ipv6 =>{
+                    if self.ipv6 == true{
+                        return
+                    }
+
+                    self.capture_flow_ipv6(&frame)
+                },
+
+                // EtherTypes::Arp => capture_flow_arp(),
+
+                // EtherTypes::Vlan => capture_flow_vlan(),
+
+                // EtherTypes::Lldp => capture_flow_lldp(),
+
+                // EtherTypes::QinQ => capture_q_n_q(),
+
+                _ => {}
+            }
+        }
+    }
+
+
+    //format String for output
+    //Layer2 source transmission type into string Unicast, broadcast, etc
+    fn layer2_source_transmission(&self, frame : &EthernetPacket) -> String {
+
+        if frame.get_source().is_broadcast() == true{
+
+            String::from("Broadcast")
+
+        }else if frame.get_source().is_multicast(){
+
+            String::from("Multicast")
+
+        }else if frame.get_source().is_unicast() == true{
+
+            String::from("Unicast")
+
+        }else{
+            String::from("")
+        }
+
+
+    }
+
+    //Layer2 destination transmission type into string Unicast, broadcast, etc
+    fn layer2_source_destination(&self, frame : &EthernetPacket) -> String{
+
+        if frame.get_destination().is_broadcast() == true{
+
+            String::from("Broadcast")
+
+        }else if frame.get_destination().is_multicast(){
+
+            String::from("Multicast")
+
+        }else if frame.get_destination().is_unicast() == true{
+
+            String::from("Unicast")
+
+        }else{
+            String::from("")
+        }
+    }
     //Ethernet type to string
     pub fn ether_type_to_text(&mut self, frame: EthernetPacket) -> String{
 
@@ -127,15 +207,273 @@ impl Filter{
         }   
         
     }
-    //Filter IP version
+
+    //ICMP code format
+    fn icmp_code_format(&self, packet: &IcmpPacket, message : String) -> String{
+        format!("ICMP Code: ({:?}) {}", packet.get_icmp_code(), message)
+    }
+
+    //ICMP type format
+    fn icmp_type_format(&self, packet : &IcmpPacket, message : String) -> String {
+
+        format!("ICMP Type: ({:?}) {}", packet.get_icmp_type(), message)
+    }
+
+    //Destination unreachable code
+    fn icmp_destination_unreachable(&self, packet : &IcmpPacket) -> String{
+
+        match packet.get_icmp_code(){
+
+            IcmpCode(0) => self.icmp_code_format(&packet, String::from("Network Unreachable")),
+            IcmpCode(1) => self.icmp_code_format(&packet, String::from("Host Unreachable")),
+            IcmpCode(2) => self.icmp_code_format(&packet, String::from("Protocol Unreachable")),
+            IcmpCode(3) => self.icmp_code_format(&packet, String::from("Port Unreachable")),
+            IcmpCode(4) => self.icmp_code_format(&packet, String::from("Fragmentation needed, fragment flag set to false")),
+            IcmpCode(5) => self.icmp_code_format(&packet, String::from("Source Route failed")),
+            IcmpCode(6) => self.icmp_code_format(&packet, String::from("Destination Network Unknown")),
+            IcmpCode(7) => self.icmp_code_format(&packet, String::from("Destination Host Unknown")),
+            IcmpCode(8) => self.icmp_code_format(packet, String::from("Source Host Isolated")),
+            IcmpCode(9) => self.icmp_code_format(&packet, String::from("Network Administratively Prohibited")),
+            IcmpCode(10) => self.icmp_code_format(&packet, String::from("Host Administratively Unknown")),
+            IcmpCode(11) => self.icmp_code_format(&packet, String::from("Network Unreachable for Type of Service")),
+            IcmpCode(12) => self.icmp_code_format(&packet, String::from("Host Unreachable for Type of Service")),
+            IcmpCode(13) => self.icmp_code_format(&packet, String::from("Communication Administratively Prohibited")),
+            IcmpCode(14) => self.icmp_code_format(&packet, String::from("Host Precedence Violation")),
+            IcmpCode(15) => self.icmp_code_format(&packet, String::from("Precedence Cutoff in Effect")),
+            _ => String::from("")
+        }
+    }
+
+    //ICMP parameter problem codes to String
+    fn icmp_parameter_problem(&self, packet: &IcmpPacket) -> String{
+
+        match packet.get_icmp_code(){
+
+            IcmpCode(0) => self.icmp_code_format(&packet, String::from("Pointer Indicates the Error")),
+            IcmpCode(1) => self.icmp_code_format(&packet, String::from("Missing a Required Option")),
+            IcmpCode(2) => self.icmp_code_format(&packet, String::from("Bad Length")),
+            _=> String::from("")
+        }
+    }
+
+
+    //icmp redirect messages
+    fn icmp_redirect(&self, packet : &IcmpPacket) -> String{
+
+        match packet.get_icmp_code(){
+            IcmpCode(0) => self.icmp_code_format(&packet, String::from("Redirect Datagram for the Network")),
+            IcmpCode(1) => self.icmp_code_format(&packet, String::from("Redirect Datagram for the Host")),
+            IcmpCode(2) => self.icmp_code_format(&packet, String::from("Redirect Datagram for the Type of Service and Network")),
+            IcmpCode(3) => self.icmp_code_format(&packet, String::from("Redirect Datagram for the Type of Service and Host")),
+            _=> String::from("")
+        }
+    }
+
+    //Time exceeded ICMP codes
+    fn icmp_time_exceeded(&self, packet : &IcmpPacket) -> String{
+
+        match packet.get_icmp_code() {
+
+            IcmpCode(0) => self.icmp_code_format(&packet, String::from("Time Limit Exceeded")),
+            IcmpCode(1) => self.icmp_code_format(&packet, String::from("Fragment Reassembly Time Exceeded")),
+            _=> String::from("")
+        }
+    }
+
+    //returns an array of two strings index 0 is the type and index 1 is the type code
+    fn icmp_type_and_code(&self, packet : &IcmpPacket) -> [String; 2]{
+        let mut type_code = [String::new(), String::new()];
+
+        match packet.get_icmp_type(){
+
+            EchoReply =>{
+
+                type_code[0] = self.icmp_type_format(&packet, String::from("(Echo Reply)"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("(Echo Reply)"));
+
+            },
+            EchoRequest =>{
+
+                type_code[0] = self.icmp_type_format(&packet, String::from("(Echo Request)"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("(Echo Request)"));
+
+            },
+            DestinationUnreachable =>{
+
+                type_code[0] = self.icmp_type_format(&packet, String::from("(Destination Unreachable)"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("(Destination Unreachable)"));
+
+            },
+            RedirectMessage => {
+
+                type_code[0] = self.icmp_type_format(&packet, self.icmp_redirect(packet));
+                type_code[1] = self.icmp_code_format(&packet, String::from("(Redirect Message)"));
+
+            },
+            RouterAdvertisement =>{
+
+                type_code[0] = self.icmp_type_format(&packet, String::from("(Router Advertisement)"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("(Router Advertisement)"));
+
+            },
+            RouterSolicitation =>{
+
+                type_code[0] = self.icmp_type_format(&packet, String::from("(Router Solicitation)"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("(Router Solicitation)"));
+
+            },
+            TimeExceeded =>{
+
+                type_code[0] = self.icmp_type_format(&packet, String::from("(Time Exceeded)"));
+                type_code[1] = self.icmp_code_format(&packet, self.icmp_time_exceeded(packet));
+
+            },
+
+            ParameterProblem => {
+
+                type_code[0] = self.icmp_type_format(&packet, String::from("Parameter Problem"));
+                type_code[1] = self.icmp_code_format(&packet, self.icmp_parameter_problem(packet));
+
+            },
+            Timestamp =>{
+                type_code[0] = self.icmp_type_format(&packet, String::from("Timestamp"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("Timestamp Request"));
+            },
+            TimestampReply =>{
+                type_code[0] = self.icmp_type_format(&packet, String::from("Timestamp Reply"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("Timestamp Request"));
+            },
+
+            AddressMaskRequest => {
+                type_code[0] = self.icmp_type_format(&packet, String::from("Address Mask Request"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("Address Mask Request"));
+
+            },
+            AddressMaskReply =>{
+                type_code[0] = self.icmp_type_format(&packet, String::from("Address Mask Reply"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("Address Mask Reply"));
+            },
+            _=>{
+                type_code[0] = self.icmp_type_format(&packet, String::from("Unknown"));
+                type_code[1] = self.icmp_code_format(&packet, String::from("Unknown"));
+            }
+        }
+
+        type_code
+    }
+
+    //layer 4 filter output
+    fn layer_4_protocol(&self, next_protocol : IpNextHeaderProtocol) -> String{
+
+        match next_protocol{
+
+            IpNextHeaderProtocols::Tcp => String::from("TCP"),
+            IpNextHeaderProtocols::Udp => String::from("UDP"),
+            IpNextHeaderProtocols::Icmp => String::from("ICMP"),
+            IpNextHeaderProtocols::Icmpv6 => String::from("ICMPv6"),
+            IpNextHeaderProtocols::Esp => String::from("ESP"),
+            IpNextHeaderProtocols::Ah => String::from("AH"),
+            _ => String::new()
+        }
+    }
+
+    //tcp flag String output
+    fn tcp_flag(&self, flags: u8) ->String{
+
+        let mut flag = String::new();
+
+        if (flags & SYN) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("SYN/ACK");
+
+
+        }else if (flags & SYN) > 0 && (flags & FIN) > 0{
+
+
+            flag.push_str("SYN/FIN");
+
+
+        }else if (flags & FIN) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("FIN/ACK");
+
+
+        }else if (flags & PSH) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("PSH/ACK");
+
+
+        }else if(flags & URG) > 0 && (flags & ACK) > 0{
+
+
+            flag.push_str("URG/ACK");
+
+
+        }else if (flags & RST) > 0  && (flags & ACK) > 0{
+
+
+            flag.push_str("RST/ACK");
+        }else if (flags & ACK) > 0{
+
+
+            flag.push_str("ACK");
+
+
+        }else if (flags & CWR) > 0{
+
+            flag.push_str("CWR");
+
+
+        }else if (flags & FIN) > 0 {
+
+
+            flag.push_str("FIN");
+
+
+        }else if (flags & PSH) > 0{
+
+
+            flag.push_str("PSH");
+
+
+        }else if (flags & RST) > 0 {
+
+
+            flag.push_str("RST");
+
+
+        }else if(flags & SYN) > 0{
+
+
+            flag.push_str("SYN");
+
+
+        }else if (flags & URG) > 0{
+
+
+            flag.push_str("URG");
+
+
+        }
+
+
+        flag
+    }
+
+
+    //Filter Menus
+    //IP menu asks user to IP version selection
     pub fn filter_ip_version_menu(&mut self){
 
         let mut input = String::new();
         
         println!("Choose IP Version");
-        println!("");
+        println!();
         println!("Press space or enter for both");
-        println!("");
+        println!();
         println!("1: IPv4");
         println!("2: IPv6");
         
@@ -158,63 +496,6 @@ impl Filter{
         clear_terminal();
     }
 
-    fn icmp_type_display_string(&mut self, packet: &IcmpPacket, message : String) -> String{
-        format!("ICMP Code: {:?} ({})", packet.get_icmp_code(), message)
-    }
-
-
-    //To Do pick up here
-    // fn icmp_type(&self, packet : &IcmpPacket) -> [String; 2]{
-    //     let mut type_code = [String::new(), String::new()];
-    //     match packet.get_icmp_type(){
-    //
-    //         EchoReply =>{
-    //             type_code[0] =format!("ICMP Type: {:?} (Echo Reply)", packet.get_icmp_type());
-    //         },
-    //         EchoRequest => format!("ICMP Type: {:?} (Echo Request)", packet.get_icmp_type()),
-    //         DestinationUnreachable => format!("ICMP Type: {:?}(Destination Unreachable)", packet.get_icmp_type()),
-    //         RedirectMessage => format!("ICMP Type: {:?} (Redirect)", packet.get_icmp_type()),
-    //         RouterAdvertisement => format!("ICMP Type: {:?} (Router AdvertisementRouter)", packet.get_icmp_type()),
-    //         RouterSolicitation => format!("ICMP Type: {:?} (Router Solicitation)", packet.get_icmp_type()),
-    //         TimeExceeded => format!("ICMP Type: {:?} (Time Exceeded)", packet.get_icmp_type()),
-    //         ParameterProblem => format!("ICMP Type: {:?} (Parameter Problem)", packet.get_icmp_type()),
-    //         Timestamp => format!("ICMP Type: {:?} (Timestamp)", packet.get_icmp_type()),
-    //         TimestampReply => format!("ICMP Type: {:?} (Timestamp Reply)", packet.get_icmp_type()),
-    //         AddressMaskRequest => format!("ICMP Type: {:?} (Address Mask Request)", packet.get_icmp_type()),
-    //         AddressMaskReply => format!("ICMP Type: {:?} (Address Mask Reply)", packet.get_icmp_type()),
-    //         _=> String::new()
-    //     }
-    // }
-
-
-    fn reset_ip_filter(&mut self){
-
-        self.ipv4 = false;
-        self.ipv6 = false;
-    }
-
-    fn set_ipv4_filter(&mut self){
-
-        self.ipv4 = false;
-        self.ipv6 = true;
-
-    }
-
-    fn set_ipv6_filter(&mut self){
-
-        self.ipv4 = true;
-        self.ipv6 = false;
-
-    }
-
-
-    //set source port filter
-    fn set_source_ipv4(&mut self, source_ip : String) {
-
-        self.source_ipv4 = source_ip.trim().to_string();        
-                
-    }
-
     pub fn source_ip_menu(&mut self){
 
         if self.ipv4 == false  && self.ipv6 == true{
@@ -234,7 +515,7 @@ impl Filter{
 
             self.source_ipv6_menu();
             self.destination_ipv6_menu();
-        } 
+        }
     }
 
     pub fn source_ipv4_menu(&mut self){
@@ -243,16 +524,16 @@ impl Filter{
         let mut is_valid: bool = true;
 
         loop{
-            println!("Leave blank for all IPs"); 
-            println!("");            
+            println!("Leave blank for all IPs");
+            println!();
             print!("Source IP (all)-> ");
-            
+
             if is_valid == false{
- 
+
                 clear_terminal();
                 input.clear();
                 println!("Enter a valid source IPv4");
-                println!("");
+                println!();
                 println!("Or press enter for all traffic");
                 print!("");
                 print!("Source IP (all)-> ");
@@ -261,7 +542,7 @@ impl Filter{
             user_input(&mut input);
 
             filter_regex_ipv4(&input, &mut is_valid);
-                        
+
             clear_terminal();
 
             if is_valid == true{
@@ -276,15 +557,6 @@ impl Filter{
 
     }
 
-    
-
-    //set source port filter
-    pub fn set_source_ipv6(&mut self, input : String) {
-
-        self.source_ipv6 = input.trim().to_string();        
-                
-    }
-
     //ip v6 menu for traffic filter
     //blank filter allows all IPs address
     //when a valid IP is entered all other IPs will
@@ -296,18 +568,18 @@ impl Filter{
 
         loop{
             println!("Leave Blank for all IPs");
-            println!("");
+            println!();
             print!("Destination IPs (All) ->");
 
             if is_valid == false{
 
                 clear_terminal();
                 input.clear();
-                
+
                 println!("Entered a valid  destination IPv6");
-                println!("");
+                println!();
                 println!("or for all IPv6 traffic");
-                println!("");
+                println!();
                 print!("Destination IPs (All) ->");
             }
 
@@ -319,7 +591,7 @@ impl Filter{
             if is_valid == true{
 
                 self.set_source_ipv6(input);
-                
+
                 break;
             }
         }
@@ -328,29 +600,22 @@ impl Filter{
 
     }
 
-
-    //set destination port filter
-    pub fn set_destination_ipv4(&mut self, input : String){
-
-        self.source_ipv4 = input.trim().to_string();        
-    }
-
     pub fn destination_ipv4_menu(&mut self){
 
         let mut input : String= String::new();
         let mut is_valid: bool = true;
 
         loop{
-            println!("Leave blank for all IPs"); 
-            println!("");            
+            println!("Leave blank for all IPs");
+            println!();
             print!("Destination IP (all)-> ");
-            
+
             if is_valid == false{
 
                 clear_terminal();
                 input.clear();
                 println!("Enter a valid destination IPv4");
-                println!("");
+                println!();
                 println!("Or press enter for all traffic");
                 print!("Destination IP (all)-> ");
             }
@@ -358,7 +623,7 @@ impl Filter{
             user_input(&mut input);
 
             filter_regex_ipv4(&input, &mut is_valid);
-                        
+
             clear_terminal();
 
             if is_valid == true{
@@ -372,32 +637,25 @@ impl Filter{
         clear_terminal();
     }
 
-    //set destination port filter
-    pub fn set_destination_ipv6(&mut self, input : String){
-
-        self.source_ipv6 = input.trim().to_string();        
-    }
-
-    
     pub fn destination_ipv6_menu(&mut self){
-        
+
         let mut input : String = String::new();
         let mut is_valid : bool = true;
 
         loop{
             println!("Leave Blank for all IPs");
-            println!("");
+            println!();
             print!("Destination IPs (All) ->");
 
             if is_valid == false{
 
                 clear_terminal();
                 input.clear();
-                
+
                 println!("Entered a valid destination  IPv6");
-                println!("");
+                println!();
                 println!("or for all IPv6 traffic");
-                println!("");
+                println!();
                 print!("Destination IPs (All) ->");
             }
 
@@ -408,8 +666,8 @@ impl Filter{
 
             if is_valid == true{
 
-                self.set_destination_ipv6(input); 
-                
+                self.set_destination_ipv6(input);
+
                 break;
             }
         }
@@ -417,62 +675,24 @@ impl Filter{
         clear_terminal();
     }
 
-
-    fn set_ports(&mut self, port_range : [u32; 2]){
-
-        if self.s_port == 60000 && self.s_limit == 60000{
-
-            self.set_s_port_range(port_range);
-        
-        }else{
-
-            self.set_d_port_range(port_range);
-        }
-
-    }
-
-    //reset port to range outside of normal
-    //port range on the high to indicate
-    //port unconfigured 
-    fn reset_s_ports(&mut self){
-
-        self.s_port = 60000;
-        self.s_limit = 60000;
-    }
-     
-    fn set_s_port(&mut self, port : u32){
-
-        self.s_port = port;
-        self.s_limit = 0;
-    }
-
-    //set source port range. index 0 will always for the
-    //s_port and index 1 s_limit
-    fn set_s_port_range(&mut self, port_range : [u32; 2]){
-        
-        self.s_port = port_range[0];
-        self.s_limit = port_range[1];
-    }
-
-
     //port menu for user input if user enters invalid input
     //all port will be counted as interesting traffic
     pub fn s_port_menu(&mut self){
 
         let mut input : String = String::new();
         let mut is_valid : bool = true;
-                
+
 
         loop{
 
-            
-            
+
+
             println!("Enter a port or valid port range");
-            println!("");
+            println!();
             println!("hit enter or space bar");
-            println!("");
+            println!();
             println!("Enter port or port range (1-65535) ->");
-            
+
             if is_valid == false{
                 let mut exit = String::new();
                 println!("Currently not filtering for any ports");
@@ -481,7 +701,7 @@ impl Filter{
 
                 if exit == String::from("y"){
 
-                    break 
+                    break
                 }
 
 
@@ -492,8 +712,8 @@ impl Filter{
             //
             self.filter_port_range(&input, &mut is_valid);
 
-          
-            
+
+
             if is_valid == true{
 
 
@@ -505,6 +725,100 @@ impl Filter{
         }
     }
 
+    //reset ip filters
+    fn reset_ip_filter(&mut self){
+
+        self.ipv4 = false;
+        self.ipv6 = false;
+    }
+
+    //set ipv4 only filter
+    fn set_ipv4_filter(&mut self){
+
+        self.ipv4 = false;
+        self.ipv6 = true;
+
+    }
+
+    //set filter for ipv6 only
+    fn set_ipv6_filter(&mut self){
+
+        self.ipv4 = true;
+        self.ipv6 = false;
+
+    }
+
+
+    //set IPV4 source port filter string
+    fn set_source_ipv4(&mut self, source_ip : String) {
+
+        self.source_ipv4 = source_ip.trim().to_string();        
+                
+    }
+
+    //set IPV6 source port filter
+    pub fn set_source_ipv6(&mut self, input : String) {
+
+        self.source_ipv6 = input.trim().to_string();        
+                
+    }
+
+
+    //set ipv4 destination port filter
+    pub fn set_destination_ipv4(&mut self, input : String){
+
+        self.source_ipv4 = input.trim().to_string();        
+    }
+
+
+
+    //set ipv6 destination port filter
+    pub fn set_destination_ipv6(&mut self, input : String){
+
+        self.source_ipv6 = input.trim().to_string();        
+    }
+
+    //set port ranges for both source and destination
+    fn set_ports(&mut self, port_range : [u32; 2]){
+
+        if self.s_port == 60000 && self.s_limit == 60000{
+
+            self.set_s_port_range(port_range);
+
+        }else{
+
+            self.set_d_port_range(port_range);
+        }
+
+    }
+
+    //reset port to range outside of normal
+    //port range on the high to indicate
+    //port reconfigured
+    fn reset_s_ports(&mut self){
+
+        self.s_port = 60000;
+        self.s_limit = 60000;
+    }
+
+    //set source ports
+    fn set_s_port(&mut self, port : u32){
+
+        self.s_port = port;
+        self.s_limit = 0;
+    }
+
+    //set source port range. index 0 will always for the
+    //s_port and index 1 s_limit
+    fn set_s_port_range(&mut self, port_range : [u32; 2]){
+
+        self.s_port = port_range[0];
+        self.s_limit = port_range[1];
+    }
+
+
+
+
     //reset destination port to default port
     // status outside of port range on the high end to
     //indicate port needs to be configured
@@ -514,20 +828,20 @@ impl Filter{
         self.d_limit = 60000;
     }
 
+    //set destination port
     pub fn set_d_port(&mut self, port : u32){
-        
+
         self.s_port = port;
         self.d_limit = 0;
-    
+
     }
 
-    //set destination port 
+    //set destination port
     pub fn set_d_port_range(&mut self, port_range : [u32; 2]){
 
         self.d_port = port_range[0];
         self.d_limit = port_range[1];
     }
-
 
     //port check and validation
     //if a port is not entered or if a port is invalid array of all zeros
@@ -650,102 +964,23 @@ impl Filter{
         
     }
 
-    fn capture_screen_print(){
 
-    }
-    pub fn capture_flow(&self, packet: &[u8]){
-        if let Some(frame) = EthernetPacket::new(packet){
-
-            self.capture_flow_layer2(&frame);
-
-            match frame.get_ethertype(){
-
-                EtherTypes::Ipv4 =>{ 
-                    if self.ipv4 == true{
-                        return
-                    }
-
-                    self.capture_flow_ipv4(&frame)
-                },
-
-                EtherTypes::Ipv6 =>{
-                    if self.ipv6 == true{
-                        return 
-                    }
-
-                    self.capture_flow_ipv6(&frame)
-                },
-            
-                // EtherTypes::Arp => capture_flow_arp(),
-
-                // EtherTypes::Vlan => capture_flow_vlan(),
-
-                // EtherTypes::Lldp => capture_flow_lldp(),
-                
-                // EtherTypes::QinQ => capture_q_n_q(),
-
-                _ => {}
-            }
-        }
-    }
-
-    fn layer2_source_transmission(&self, frame : &EthernetPacket) -> String {        
-        
-        if frame.get_source().is_broadcast() == true{
-
-            String::from("Broadcast")
-
-        }else if frame.get_source().is_multicast(){
-
-            String::from("Multicast")
-
-        }else if frame.get_source().is_unicast() == true{
-
-            String::from("Unicast")
-        
-        }else{
-            String::from("")
-        }
-
-
-    }
-
-
-    fn layer2_source_destination(&self, frame : &EthernetPacket) -> String{
-
-        if frame.get_source().is_broadcast() == true{
-
-            String::from("Broadcast")
-
-        }else if frame.get_source().is_multicast(){
-
-            String::from("Multicast")
-
-        }else if frame.get_source().is_unicast() == true{
-
-            String::from("Unicast")
-        
-        }else{
-            String::from("")
-        }
-    }
-
-    
-
+    //output for capture flow
     fn capture_flow_layer2(&self, frame : &EthernetPacket){
 
         
         println!("\x1b[1m-------------------------------------------------------\x1b[0m");
-        println!("");
+        println!();
         println!("\x1b[91;1mEthernet II:\x1b[0m");
         println!("Timestamp: {}", time_now());
         println!("\x1b[1mSrc:\x1b[0m {} ({})", frame.get_source(), self.layer2_source_transmission(frame));
         println!("\x1b[1mDST:\x1b[0m {} ({})", frame.get_destination(), self.layer2_source_destination(frame));
         println!("\x1b[1mType:\x1b[0m {}", frame.get_ethertype());
-        println!("");
+        println!();
     
     }
 
+    //ipv4 capture output
     fn capture_flow_ipv4(&self, frame: &EthernetPacket){
 
         
@@ -762,30 +997,34 @@ impl Filter{
                 
                 IpNextHeaderProtocols::Icmp => self.capture_icmp_ipv4(packet),
 
-            _=> println!("")
+            _=> println!()
                 
             }
 
         }
     }
 
+    //ipv4 icmp output
     fn capture_icmp_ipv4(&self, packet : Ipv4Packet ){
 
         if let Some(icmp) = IcmpPacket::new(packet.payload()){
 
-            println!("ICMP");
-            println!("Type: {:?}", icmp.get_icmp_type());
-            println!("Code: {:?}", icmp.get_icmp_code());
-            println!("{}", icmp.);
+            let icmp_type_code : [String;2] = self.icmp_type_and_code(&icmp);
+
+            println!("{}", icmp_type_code[0]);
+            println!("{}", icmp_type_code[1]);
+
+
         }
     }
 
+    //tcp ipv4 output
     fn capture_flow_tcp_ipv4(&self, packet : Ipv4Packet){
 
         if let Some(segment) = TcpPacket::new(packet.payload()){
 
 
-            println!("");            
+            println!();
             println!("\x1b[91;1mInternet Protocol Version 4:\x1b[0m");
             println!("\x1b[1mVersion\x1b[0m: 4");
             println!("\x1b[1mHeader Length\x1b[0m: {}", packet.get_header_length());
@@ -793,14 +1032,16 @@ impl Filter{
             println!("\x1b[1mTime to Live\x1b[0m: {}", packet.get_ttl());
             println!("\x1b[1mFragment Offset\x1b[0m: {}", packet.get_fragment_offset());
             println!("\x1b[1mProtocol\x1b[0m: {}", self.layer_4_protocol(packet.get_next_level_protocol()));
-            println!("\x1b[1mSource Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_source(), segment.get_source());
-            println!("\x1b[1mDestination Address:\x1b[0m{}:{}", packet.get_destination(), segment.get_destination());
-            println!("");
+            println!("\x1b[1mFlags\x1b[0m: {}", self.tcp_flag(packet.get_flags()));
+            println!("\x1b[1mSource Address: {}:{}", packet.get_source(), segment.get_source());
+            println!("\x1b[1mDestination Address:\x1b[0m {}:{}", packet.get_destination(), segment.get_destination());
+            println!();
 
             
         }
     }
 
+    //output fpr udp capture
     pub fn capture_flow_udp_ipv4(&self, packet : Ipv4Packet){
 
         if let Some(segment) = UdpPacket::new(packet.payload()){
@@ -810,13 +1051,13 @@ impl Filter{
             println!("Source: {}:{}", packet.get_source(), segment.get_source());
             println!("Destination: {}:{}", packet.get_destination(), segment.get_destination());
             println!("Length: {}", packet.get_total_length());
-            println!("");
+            println!();
                
         }
     }
 
 
-
+    //ipv6 capture output
     fn capture_flow_ipv6(&self, frame : &EthernetPacket){
 
         self.capture_flow_layer2(frame);
@@ -831,13 +1072,14 @@ impl Filter{
 
                     IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6(segment),
 
-                    _=>println!("")    
+                    _=>println!()
                 }
             }
         }
         
     }
 
+    //ipv6 TCP output
     fn capture_flow_tcp_ipv6(&self, packet : Ipv6Packet){
 
         if let Some(segment) = TcpPacket::new(packet.payload()){
@@ -852,11 +1094,13 @@ impl Filter{
             println!("\x1b[1mHop Limit:\x1b[0m {}", packet.get_hop_limit());
             println!("\x1b[1mSource Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_source(), segment.get_source());
             println!("\x1b[1mDestination Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_destination(), segment.get_destination());
-            println!("");
+            println!();
             
         }
     }
 
+
+    //ipv6 output flow
     fn capture_flow_udp_ipv6(&self,packet : Ipv6Packet){
 
         
@@ -872,195 +1116,11 @@ impl Filter{
             println!("\x1b[1mHop Limit:\x1b[0m {}", packet.get_hop_limit());
             println!("\x1b[1mSource Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_source(), segment.get_source());
             println!("\x1b[1mDestination Address:\x1b[0m \x1b[1m[ {} ]\x1b[0m:{}", packet.get_destination(), segment.get_destination());
-            println!("");
+            println!();
         }
     }
 
-    fn layer_4_protocol(&self, next_protcol : IpNextHeaderProtocol) -> String{
-
-        match next_protcol{
-
-            IpNextHeaderProtocols::Tcp => String::from("TCP"),
-            IpNextHeaderProtocols::Udp => String::from("UDP"),
-            IpNextHeaderProtocols::Icmp => String::from("ICMP"),
-            IpNextHeaderProtocols::Icmpv6 => String::from("ICMPv6"),
-            IpNextHeaderProtocols::Esp => String::from("ESP"),
-            IpNextHeaderProtocols::Ah => String::from("AH"),
-            _ => String::new()
-        }
-    }
-
-    fn tcp_flag(&self, flags: u8) ->String{
-
-        let mut flag = String::new();
-
-        if (flags & ACK) > 0{
-
-            
-            flag.push_str("ACK");
-
-
-        }else if (flags & CWR) > 0{
-
-            flag.push_str("CWR");
-
-        
-        }else if (flags & FIN) > 0 {
-
-
-            flag.push_str("FIN");
-
-
-        }else if (flags & PSH) > 0{
-
-
-            flag.push_str("PSH");
-
-
-        }else if (flags & RST) > 0 {
-
-
-            flag.push_str("RST");
-
-
-        }else if(flags & SYN) > 0{
-
-            
-            flag.push_str("SYN");
-        
-
-        }else if (flags & URG) > 0{
-
-
-            flag.push_str("URG");
-        
-
-        }else if (flags & SYN) > 0 && (flags & ACK) > 0{
-
-
-            flag.push_str("SYN/ACK");
-        
-
-        }else if (flags & SYN) > 0 && (flags & FIN) > 0{
-
-
-            flag.push_str("SYN/FIN");
-
-
-        }else if (flags & FIN) > 0 && (flags & ACK) > 0{
-
-
-            flag.push_str("FIN/ACK");
-        
-
-        }else if (flags & PSH) > 0 && (flags & ACK) > 0{
-
-
-            flag.push_str("PSH/ACK");
-        
-
-        }else if(flags & URG) > 0 && (flags & ACK) > 0{
-
-
-            flag.push_str("URG/ACK");
-        
-
-        }else if (flags & RST) > 0  && (flags & ACK) > 0{
-
-
-            flag.push_str("RST/ACK");
-        }  
-
-
-        flag
-    }
-
-} 
-
-
-
-
-
-
-// //user input menu and take user input
-// fn filter_ip_input_ipv4(input: &mut String , is_valid : &bool, is_source : bool){
-        
-
-        
-//         println!("Leave blank for all IPs");
-//         println!("");
-
-//         //takes input from the user
-        
-//         user_input(input);
-        
-//         if *is_valid == false{
-//             println!("Enter a valid IPv4 or IPv6 address");
-//             println!("");
-//         }
-        
-//         if is_source == true{
-
-//             print!("Source IP (all)-> ");
-        
-//         }else{
-//             print!("Destination IP (all)-> ");
-//         }
-        
-//         clear_terminal();
-
-// }
-
-// fn filter_port(input : &mut String, is_source : bool) -> u32{
-
-//     let mut is_valid = true;
-    
-    
-//     let mut port : u32;
-
-//     loop{
-//         println!("Leave blank for all ports");
-//         println!("");
-//         if is_valid == false{
-
-//             println!("Select valid port 1-65535");
-//             println!("")
-//         }
-//         if is_source{
-        
-//             println!("Source port:")
-        
-//         }else{
-        
-//             println!("Destination port:")
-        
-//         }        
-
-//         user_input(input);
-
-//         //convert user input to u32:        
-//         port = parse_string_to_num_u32(input); 
-
-//         filter_port_check(&port, &mut is_valid);        
-        
-//         if is_valid == true{
-            
-//             clear_terminal();
-//             break;
-            
-//         }else{
-            
-//             clear_terminal();
-
-//             continue;
-//         }
-
-//     }
-
-//     port
-
-
-// }
+}
 
 fn filter_port_check(value : &u32, is_valid_ : &mut bool){
 

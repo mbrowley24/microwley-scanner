@@ -180,7 +180,7 @@ pub fn master_menu(){
         Some(("cmd-start", _)) => {
             println!("stop service....")
         }
-        _ => println!("Unkown command. use --hlp to see available options.")
+        _ => println!("Unknown command. use --hlp to see available options.")
     }
 
 
@@ -195,13 +195,13 @@ fn menu_set_up(input : &mut String){
 
      println!("Welcome to Microwley-Scanner!!");
      println!("-----------------------------");
-     println!("");
+     println!();
      println!("Make a selection: ");
-     println!("");
+     println!();
      println!("1: Packet Capture");
      println!("2: Network Scanner");
      println!("3: Exit Program ");
-     println!("");
+     println!();
      print!("Make a selection -> ");
     user_input(input);
 

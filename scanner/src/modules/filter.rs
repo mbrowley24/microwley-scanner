@@ -20,6 +20,7 @@ use pnet::packet::{ethernet::{
     IcmpTypes,
 },
 icmpv6::{
+    Icmpv6Code,
     Icmpv6Packet,
     Icmpv6Types,
 },
@@ -114,23 +115,25 @@ impl Filter{
 
             self.capture_flow_layer2(&frame);
 
-            match frame.get_ethertype(){
-
-                EtherTypes::Ipv4 =>{
-                    if self.ipv4 == true{
-                        return
-                    }
-
-                    self.capture_flow_ipv4(&frame)
-                },
-
-                EtherTypes::Ipv6 =>{
-                    if self.ipv6 == true{
-                        return
-                    }
-
-                    self.capture_flow_ipv6(&frame)
-                },
+            // match frame.get_ethertype(){
+            //
+            //     EtherTypes::Ipv4 =>{
+            //         if self.ipv4 == true{
+            //             println!("in here");
+            //             return
+            //         }
+            //
+            //         // self.capture_flow_ipv4(&frame)
+            //     },
+            //
+            //     EtherTypes::Ipv6 =>{
+            //         if self.ipv6 == true{
+            //             println!("in here");
+            //             return
+            //         }
+            //
+            //         self.capture_flow_ipv6(&frame)
+            //     },
 
                 // EtherTypes::Arp => capture_flow_arp(),
 
@@ -140,8 +143,8 @@ impl Filter{
 
                 // EtherTypes::QinQ => capture_q_n_q(),
 
-                _ => {}
-            }
+            //     _ => {}
+            // }
         }
     }
 
@@ -210,7 +213,7 @@ impl Filter{
     }
 
     fn icmp6_code_format(&self, packet : &Icmpv6Packet, message : String) -> String{
-        format!("{:?}: {}", packet.get_icmp_code(), message)
+        format!("{:?}: {}", packet.get_icmpv6_code(), message)
     }
 
     //ICMP type format
@@ -221,7 +224,7 @@ impl Filter{
 
     fn icmp6_type_format(&self, packet : &Icmpv6Packet, message : String) -> String {
 
-        format!("{:?}: {}", packet.get_icmp_type(), message)
+        format!("{:?}: {}", packet.get_icmpv6_type(), message)
     }
 
     //Destination unreachable code
@@ -290,32 +293,32 @@ impl Filter{
 
         match packet.get_icmpv6_code(){
 
-            IcmpCode(0) => self.icmp6_code_format(&packet, String::from("No route to destination")),
+            Icmpv6Code(0) => self.icmp6_code_format(&packet, String::from("No route to destination")),
 
-            IcmpCode(1) => {
+            Icmpv6Code(1) => {
                 self.icmp6_code_format(&packet,
                 String::from("Communication with the destination is administratively prohibited.")
                 )
             },
 
-            IcmpCode(2) => {
+            Icmpv6Code(2) => {
                 self.icmp6_code_format(&packet,String::from("Beyond scope of source address"))
             }
 
-            IcmpCode(3) => self.icmp6_code_format(&packet,String::from("Address unreachable")),
+            Icmpv6Code(3) => self.icmp6_code_format(&packet,String::from("Address unreachable")),
 
-            IcmpCode(4) => self.icmp6_code_format(&packet,String::from("Port unreachable")),
+            Icmpv6Code(4) => self.icmp6_code_format(&packet,String::from("Port unreachable")),
 
-            IcmpCode(5) =>{
+            Icmpv6Code(5) =>{
                 self.icmp6_code_format(&packet,
                                    String::from("Source address failed ingress/egress policy"))
             },
 
-            IcmpCode(6) => {
+            Icmpv6Code(6) => {
                 self.icmp6_code_format(&packet, String::from("Reject route to destination"))
             },
 
-            IcmpCode(7) =>{
+            Icmpv6Code(7) =>{
                 self.icmp6_code_format(&packet, String::from("DError in source routing header."))
             }
 
@@ -328,14 +331,14 @@ impl Filter{
 
 
         match packet.get_icmpv6_code(){
-            IcmpCode(0) => {
+            Icmpv6Code(0) => {
                 self.icmp6_code_format(&packet, String::from("No route to destination"))
             },
-            IcmpCode(1) => {
+            Icmpv6Code(1) => {
                 self.icmp6_code_format(&packet,
                String::from("Data field contains a name that is fully or partially qualified"))
             }
-            IcmpCode(2) =>{
+            Icmpv6Code(2) =>{
                 self.icmp6_code_format(&packet,
                                        String::from("Data field contains an IPv4 address"))
             }
@@ -346,11 +349,12 @@ impl Filter{
     }
     fn icmp_node_information_response(&self, packet : &Icmpv6Packet) -> String{
 
-        match packet.get_icmp_code(){
+        match packet.get_icmpv6_code(){
 
-            IcmpCode(0) => self.icmp6_code_format(packet, String::from("Reply, no error")),
-            IcmpCode(1) => self.icmp6_code_format(packet, String::from("Reply, name does not exist")),
-            IcmpCode(2) => self.icmp6_code_format(packet, String::from("Reply, type of data does not exist")),
+            Icmpv6Code(0) => self.icmp6_code_format(packet, String::from("Reply, no error")),
+            Icmpv6Code(1) => self.icmp6_code_format(packet, String::from("Reply, name does not exist")),
+            Icmpv6Code(2) => self.icmp6_code_format(packet, String::from("Reply, type of data does not exist")),
+            _=> String::from("")
         }
     }
 
@@ -374,15 +378,15 @@ impl Filter{
 
         match packet.get_icmpv6_code(){
 
-            IcmpCode(0) =>{
+            Icmpv6Code(0) =>{
                 self.icmp6_code_format(&packet, String::from("Erroneous header field encountered"))
             },
 
-            IcmpCode(1) => {
+            Icmpv6Code(1) => {
                 self.icmp6_code_format(&packet, String::from("Unrecognized next header type encountered"))
             },
 
-            IcmpCode(2) =>{
+            Icmpv6Code(2) =>{
                 self.icmp6_code_format(&packet, String::from("Unrecognized IPv6 option encountered"))
             }
 
@@ -420,15 +424,15 @@ impl Filter{
 
         match packet.get_icmpv6_code(){
 
-            IcmpCode(0) =>{
+            Icmpv6Code(0) =>{
                 self.icmp6_code_format(&packet, String::from("Command."))
             },
 
-            IcmpCode(1) =>{
+            Icmpv6Code(1) =>{
                 self.icmp6_code_format(&packet, String::from("Result"))
             },
 
-            IcmpCode(255) => {
+            Icmpv6Code(255) => {
                 self.icmp6_code_format(&packet, String::from("Error"))
             }
 
@@ -451,11 +455,11 @@ impl Filter{
 
         match packet.get_icmpv6_code(){
 
-            IcmpCode(0) =>{
+            Icmpv6Code(0) =>{
                 self.icmp6_code_format(&packet, String::from("Hop limit exceeded in transit"))
             },
 
-            IcmpCode(1) =>{
+            Icmpv6Code(1) =>{
                 self.icmp6_code_format(&packet, String::from("Fragment reassembly time exceeded"))
             }
 
@@ -549,18 +553,68 @@ impl Filter{
     //To DO finish ICMP 6 type and code
     fn icmp6_type_and_code(&self, packet : &Icmpv6Packet) -> [String; 2]{
 
+        println!("icmp6_type_and_code Marker");
         let mut type_code: [String; 2] = [String::new(), String::new()];
         match packet.get_icmpv6_type(){
+
+            Icmpv6Types::DestinationUnreachable =>{
+                type_code[0] = self.icmp6_type_format(packet,
+                                                      String::from("Destination Unreachable"));
+                type_code[1] = self.icmp6_type_format(packet,
+                                                      self.icmp6_destination_unreachable(packet));
+            }
             Icmpv6Types::EchoReply =>{
 
                 type_code[0] = self.icmp6_type_format(packet, String::from("(Echo Reply)"));
                 type_code[1] = self.icmp6_code_format(packet, String::from("(Echo Reply)"));
             }
+
+            Icmpv6Types::EchoRequest =>{
+                type_code[0] = self.icmp6_type_format(packet, String::from("(Echo Request"));
+                type_code[1] = self.icmp6_code_format(packet, String::from("(Echo Request"));
+            }
+
+
+            Icmpv6Types::NeighborAdvert =>{
+                type_code[0] = self.icmp6_type_format(packet, String::from("(NeighborAdvert)"));
+                type_code[1] = self.icmp6_code_format(packet, String::from("(No specific code"));
+            }
+
+            Icmpv6Types::NeighborSolicit =>{
+                type_code[0] = self.icmp6_type_format(packet, String::from("(Neighbor Solicit"));
+                type_code[1] = self.icmp6_code_format(packet, String::from("(No specific code"));
+            }
+
+            Icmpv6Types::PacketTooBig =>{
+                type_code[0] = self.icmp6_type_format(packet, String::from("(PacketTooBig)"));
+                type_code[1] = self.icmp6_code_format(packet, String::from("(No specific code)"));
+            }
+
+            Icmpv6Types::Redirect =>{
+                type_code[0] = self.icmp6_type_format(packet, String::from("(Redirect)"));
+                type_code[1] = self.icmp6_code_format(packet, String::from("(No specific code"));
+            }
+
+            Icmpv6Types::RouterAdvert =>{
+                type_code[0] = self.icmp6_type_format(packet, String::from("(Router Advert)"));
+                type_code[1] = self.icmp6_code_format(packet, String::from("(No specific code)"));
+            }
+
+            Icmpv6Types::RouterSolicit =>{
+                type_code[0] = self.icmp6_type_format(packet, String::from("(Router Solicit"));
+                type_code[1] = self.icmp6_code_format(packet, String::from("(No specific code)"));
+            }
+
+            Icmpv6Types::TimeExceeded => {
+                type_code[0] = self.icmp6_code_format(packet, String::from("(Time Exceeded)"));
+                type_code[1] = self.icmp6_code_format(packet, self.icmp6_time_exceeded(packet));
+            }
+
+            _=> println!()
+
         }
 
-
         type_code
-
     }
 
     //layer 4 filter output
@@ -617,6 +671,7 @@ impl Filter{
 
 
             flag.push_str("RST/ACK");
+
         }else if (flags & ACK) != 0{
 
 
@@ -1167,9 +1222,11 @@ impl Filter{
 
 
     //IPV4 packet match to details of the packet or for short abbr traffic flow
+
     fn capture_flow_ipv4(&self, frame: &EthernetPacket){
 
         if let Some(packet) = Ipv4Packet::new(frame.payload()) {
+
 
             match self.details{
 
@@ -1191,7 +1248,7 @@ impl Filter{
 
             IpNextHeaderProtocols::Icmp =>{
 
-                self.capture_icmp_ipv4(packet);
+                self.capture_flow_icmp_ipv4(packet);
             },
             IpNextHeaderProtocols::Tcp =>{
 
@@ -1201,7 +1258,7 @@ impl Filter{
 
                 self.capture_flow_udp_ipv4_abbr(packet);
             }
-            _=> println!("Unhandled packet: {:?}", packet)
+            _=> println!("Unhandled packet: Here Here")
         }
 
     }
@@ -1218,7 +1275,7 @@ impl Filter{
 
         match packet.get_next_level_protocol() {
 
-            IpNextHeaderProtocols::Icmp => self.capture_icmp_ipv4(&packet),
+            IpNextHeaderProtocols::Icmp => self.capture_flow_icmp_ipv4(&packet),
 
             IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv4(&packet),
 
@@ -1238,6 +1295,7 @@ impl Filter{
 
     //ipv4 icmp output
     fn capture_flow_icmp_ipv4(&self, packet : &Ipv4Packet ){
+
 
         if let Some(icmp) = IcmpPacket::new(packet.payload()){
 
@@ -1315,26 +1373,43 @@ impl Filter{
 
 
     //ipv6 capture output
-    fn capture_flow_ipv6(&self, packet : &Ipv6Packet){
+    fn capture_flow_ipv6(&self, frame : &EthernetPacket){
 
         if self.icmpv6 == true {
             return;
         }
 
-        match self.details{
+        if let Some(packet) = Ipv6Packet::new(frame.payload()){
+            match self.details{
 
-            true => self.capture_flow_tcp_ipv6_details(&packet),
+                true => self.capture_flow_ipv6_details(&packet),
 
-            false => self.capture_flow_tcp_ipv6_abbr(packet)
+                false => self.capture_flow_ipv6_abbr(&packet)
+            }
         }
+
+    }
+
+    fn capture_flow_ipv6_abbr(&self, packet :&Ipv6Packet){
+
+        match packet.get_next_header(){
+            IpNextHeaderProtocols::Icmpv6 => self.capture_flow_icmp_ipv6(packet),
+            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6_abbr(packet),
+            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6_abbr(packet),
+            _=> println!()
+        }
+
     }
 
     fn capture_flow_ipv6_details(&self, packet : &Ipv6Packet){
 
         match packet.get_next_header() {
 
-            IpNextHeaderProtocols::Icmpv6 => self.capture_flow_icmp_ipv6(&packet),
-            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6_abbr(packet),
+            IpNextHeaderProtocols::Icmpv6 => self.capture_flow_icmp_ipv6(packet),
+            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6_details(packet),
+            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6_details(packet),
+
+            _=> println!()
         }
 
     }
@@ -1343,7 +1418,7 @@ impl Filter{
 
         if let Some(icmp) = Icmpv6Packet::new(packet.payload()){
 
-            let icmp_type_code : [String;2] = self.icmp_type_and_code(&icmp);
+            let icmp_type_code : [String;2] = self.icmp6_type_and_code(&icmp);
             println!("\x1b[91;1mICMP:\x1b[0m");
             println!("Packet Length: {}", icmp.payload().len());
             println!("{} --> {}", packet.get_source(), packet.get_destination());
@@ -1354,6 +1429,7 @@ impl Filter{
 
     fn capture_flow_tcp_ipv6_abbr(&self, packet : &Ipv6Packet){
 
+        println!("in tcp abbr");
         if let Some(segment) = TcpPacket::new(packet.payload()){
 
             println!("\x1b[91;1mInternet Protocol Version 6\x1b[0m");
@@ -1389,10 +1465,27 @@ impl Filter{
     }
 
 
-    //ipv6 output flow
-    fn capture_flow_udp_ipv6(&self,packet : Ipv6Packet){
+    fn capture_flow_udp_ipv6_abbr(&self,packet : &Ipv6Packet){
 
-        
+
+
+        if let Some(segment) = UdpPacket::new(packet.payload()){
+
+
+            println!("\x1b[91;1mInternet Protocol Version 6\x1b[0m");;
+            println!("[0m \x1b[1m[ {} ]\x1b[0m:{} --> \x1b[1m[ {} ]\x1b[0m:{}",
+                     packet.get_source(),
+                     segment.get_source(),
+                     packet.get_destination(),
+                     packet.get_destination());
+            println!();
+        }
+    }
+
+    //ipv6 output flow
+    fn capture_flow_udp_ipv6_details(&self,packet : &Ipv6Packet){
+
+
 
         if let Some(segment) = UdpPacket::new(packet.payload()){
 
@@ -1419,15 +1512,24 @@ impl Filter{
 
             EtherTypes::Ipv4 =>{
 
+                if self.ipv4 == true{
+                    return
+                }
+
                 self.capture_flow_ipv4(frame);
 
             },
             EtherTypes::Ipv6 =>{
 
+                if self.ipv6 == true{
+                    return
+                }
+
+                self.capture_flow_ipv6(frame);
             }
+
+            _=> println!()
         }
-
-
 
     }
 

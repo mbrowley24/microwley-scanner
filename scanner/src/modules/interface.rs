@@ -417,7 +417,7 @@ fn get_of_iface_name(name: &str) -> String{
 
 
 //check if the selected interface is valid. if iface_count is == 1 then idx is valid
-//ifcae_count is less than one then there is no interface with the idx provided by the user
+//iface_count is less than one then there is no interface with the idx provided by the user
 //if the iface_count is greater than one then there is an issue with the program
 pub fn check_iface_idx_valid(interfaces : &Vec<NetworkInterface>, iface_idx : &usize) -> bool{
 

@@ -18,9 +18,7 @@ pub fn packet_capture(menu: &mut String){
 
     let mut traffic_filter = Filter::new();
 
-    traffic_filter.filter_ip_version_menu();
-
-    traffic_filter.source_ip_menu();
+    traffic_filter.filter_menu();
 
 
    

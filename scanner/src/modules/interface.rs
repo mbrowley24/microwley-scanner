@@ -62,14 +62,14 @@ impl Interface{
 
     pub fn capture(&mut self, packet_filter : packet_filter){
         crusor_to_top_left();
-        println!("[Timestamp]{}[protocol]{}[Source IP:port]{}-->{}[Destination IP: Port]{}[Packet Size]{}[Flags]",
-            spacer_size(15),
-            spacer_size(5),
-            spacer_size(5),
-            spacer_size(5),
-            spacer_size(5),
-            spacer_size(5)
-        );        
+        // println!("[Timestamp]{}[protocol]{}[Source IP:port]{}-->{}[Destination IP: Port]{}[Packet Size]{}[Flags]",
+        //     spacer_size(15),
+        //     spacer_size(5),
+        //     spacer_size(5),
+        //     spacer_size(5),
+        //     spacer_size(5),
+        //     spacer_size(5)
+        // );
         
         loop{
             

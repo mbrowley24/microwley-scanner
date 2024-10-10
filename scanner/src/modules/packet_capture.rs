@@ -7,35 +7,28 @@ use crate::modules::{
     },
 };
 use::pnet::datalink::NetworkInterface;
+use::std::io::{
+    self,
+    Write,
+};
 
 
 
 
 pub fn packet_capture(menu: &mut String){
 
-    //Pakcet capture main menu returns and interface
+    let mut  stdin = io::stdin();
+
+    //Packet capture main menu returns and interface
     let iface_option: Option<Interface> = interface::interface_menu(menu);
 
     let mut traffic_filter = Filter::new();
 
     traffic_filter.filter_menu();
 
+    if let Some(mut iface) = iface_option  {
 
-   
-
-    println!("up till here");
-
-    
-    match iface_option  {
-        
-        Some(mut iface) => {
-
-            iface.capture(traffic_filter);
-        }
-
-        None =>{
-
-        }        
+        iface.capture(traffic_filter);
 
     }
 

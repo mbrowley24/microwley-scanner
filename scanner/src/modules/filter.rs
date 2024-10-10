@@ -11,13 +11,20 @@ use crate::modules::menu::{
     time_now
 
 };
-use pnet::packet::{ethernet::{
-    EtherTypes,
-    EthernetPacket
-}, icmp::{
-    IcmpCode,
-    IcmpPacket,
-    IcmpTypes,
+use pnet::packet::{
+    arp::{
+        ArpPacket,
+        ArpHardwareType,
+        ArpOperations,
+    },
+    ethernet::{
+        EtherTypes,
+        EthernetPacket
+    },
+    icmp::{
+        IcmpCode,
+        IcmpPacket,
+        IcmpTypes,
 },
 icmpv6::{
     Icmpv6Code,
@@ -49,6 +56,7 @@ icmpv6::{
 use regex::Regex;
 use std::io;
 use std::io::{Stdout, Write};
+use pnet::packet::arp::ArpOperation;
 
 pub struct Filter{
     source_ipv4 : String,
@@ -140,26 +148,70 @@ impl Filter{
 
                 EtherTypes::Ipv6 => {
                     if self.ipv6 == true {
-                        println!("in here");
                         return
                     }
 
                     self.capture_flow_ipv6(&frame, &mut stdout);
                 },
 
+
+                EtherTypes::Arp => self.capture_flow_arp(&frame, &mut stdout),
+
                 _ => {}
-
-                // EtherTypes::Arp => capture_flow_arp(),
-
-                // EtherTypes::Vlan => capture_flow_vlan(),
-
-                // EtherTypes::Lldp => capture_flow_lldp(),
-
-                // EtherTypes::QinQ => capture_q_n_q(),
-
-                //     _ => {}
                 // }
             }
+        }
+    }
+
+    fn arp_hardware_types(&self, hardware_type : ArpHardwareType ) -> String {
+
+            match hardware_type.0{
+
+                1 =>{
+                    String::from("Ethernet")
+                }
+                6 => {
+                    String::from("IEEE 802 Networks")
+                }
+                15 => {
+                    String::from("Frame Relay")
+                }
+                24 =>{
+                    String::from("IEEE 1394 (FireWire)")
+                }
+                _=> return String::from("Unknown or unsupported hardware type"),
+            }
+    }
+
+
+    fn arp_operation_types(&self, arp_operation: ArpOperation) -> String {
+
+        match arp_operation {
+            ArpOperations::Request => String::from("Request"),
+            ArpOperations::Reply => String::from("Reply"),
+            _=> String::from("Unknown or unsupported arp operation"),
+        }
+    }
+
+    fn capture_flow_arp(&self, frame: &EthernetPacket, stdout: &mut Stdout ) {
+
+        if let Some(arp) = ArpPacket::new(frame.payload()) {
+
+            let mut output: String = String::new();
+
+            output.push_str("\x1b[91;1mARP:\x1b[0m\n");
+            output.push_str(format!("Hardware Type: {}\n",
+                                    self.arp_hardware_types(arp.get_hardware_type())).as_str());
+            output.push_str(format!("Operation: {}\n",
+                                    self.arp_operation_types(arp.get_operation())).as_str());
+            output.push_str(format!("Sender hardware Address: {}\n", arp.get_sender_hw_addr()).as_str());
+            output.push_str(format!("Sender protocol Address: {}\n", arp.get_sender_proto_addr()).as_str());
+            output.push_str(format!("Target hardware Address: {}\n", arp.get_target_hw_addr()).as_str());
+            output.push_str(format!("Target protocol Address: {}\n", arp.get_target_proto_addr()).as_str());
+            output.push_str("\n");
+
+            write!(stdout, "{}", output).unwrap();
+            stdout.flush().unwrap();
         }
     }
 

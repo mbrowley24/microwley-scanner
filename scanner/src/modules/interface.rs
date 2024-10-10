@@ -1,4 +1,8 @@
-use crate::modules::filter::Filter as packet_filter;
+use crate::modules::{
+    filter::Filter as packet_filter,
+    export_to_file::ExportToTextFile,
+};
+
 use crate::menu::{
   clear_terminal,
   crusor_to_top_left,
@@ -26,6 +30,7 @@ use pnet::{
 use std::{
     io::{self, Write}, iter::Filter, num::ParseIntError, time
 };
+
 use regex::Regex;
 
 
@@ -61,16 +66,13 @@ impl Interface{
 
 
     pub fn capture(&mut self, packet_filter : packet_filter){
-        crusor_to_top_left();
-        // println!("[Timestamp]{}[protocol]{}[Source IP:port]{}-->{}[Destination IP: Port]{}[Packet Size]{}[Flags]",
-        //     spacer_size(15),
-        //     spacer_size(5),
-        //     spacer_size(5),
-        //     spacer_size(5),
-        //     spacer_size(5),
-        //     spacer_size(5)
-        // );
-        
+
+        let mut  file_writer = ExportToTextFile::new();
+
+
+        file_writer.create_new_file();
+
+
         loop{
             
             match self.rx.next(){
@@ -156,10 +158,9 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
         //check if user wants to return to previouos menu
         previous_menu(&option, menu); 
     
-        
-                
+
         //validate user input
-        //user input must be a digit 
+        // must be a digit
         input_validation_digit(&option, &mut is_valid);                          
         
         
@@ -175,7 +176,7 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
         idx  = parse_string_to_num_u32(&option) as usize;
 
 
-        //check if the an interace exsists for the value the user provided
+        //check if the interface exists for the value the user provided
         let iface_valid: bool  = check_iface_idx_valid(&interfaces, &idx); 
         
         if iface_valid == false {
@@ -205,24 +206,36 @@ pub fn interface_menu_text(interfaces : &Vec<String>,
                                 input: &mut String,
                                 invalid_char : &bool){
 
-    println!("                        Microwley-scanner: Packet Capture");
-    println!("                        ---------------------------------");
-    println!("");
-    println!("Index   Name        MAC Addr           Active    IPv4         IPv6 -> Link-Local");
-    println!("----------------------------------------------------------------------------------------------");
+    let mut propmt: String = String::new();
+    propmt.clear();
+    propmt.push_str(format!("{}Microwley-scanner: Packet Capture\n",
+                                spacer_size(25)).as_str());
+
+    propmt.push_str(format!("{}---------------------------------\n\n",
+                            spacer_size(25)).as_str());
+
+    propmt.push_str(format!("Index{}Name{}MAC Addr{}Active{}IPv4{}IPv6 -> Link-Local\n",
+        spacer_size(4), spacer_size(9), spacer_size(12),
+        spacer_size(5), spacer_size(10)
+    ).as_str());
+
+    propmt
+        .push_str("----------------------------------------------------------------------------------------------\n\n");
+
     for iface in interfaces.iter(){
-        println!("{}", iface);
-        println!("----------------------------------------------------------------------------------------------")
+        propmt.push_str(format!("{}\n", iface).as_str());
+        propmt.push_str("----------------------------------------------------------------------------------------------\n\n");
     }
-    println!("");
-    println!("E-> Back to main menu");
-    println!("");
+    propmt.push_str("E-> Back to main menu\n\n");
+
+
     if *invalid_char{
-        println!("Please choose a valid Index");
-        println!("");
+        propmt.push_str("Please choose a valid Index\n\n");
     }
     print!("Enter a valid index ->");
+
     io::stdout().flush().unwrap();
+
     io::stdin().read_line(input)
     .expect("Error reading input");
 

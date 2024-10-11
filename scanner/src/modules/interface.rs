@@ -27,9 +27,11 @@ use pnet::{
     }
 };
 
-use std::{
-    io::{self, Write}, iter::Filter, num::ParseIntError, time
-};
+use std::io::{
+        self,
+        Write
+    };
+
 
 use regex::Regex;
 
@@ -65,12 +67,7 @@ impl Interface{
     }
 
 
-    pub fn capture(&mut self, packet_filter : packet_filter){
-
-        let mut  file_writer = ExportToTextFile::new();
-
-
-        file_writer.create_new_file();
+    pub fn capture(&mut self, packet_filter : &mut packet_filter){
 
 
         loop{
@@ -138,7 +135,9 @@ fn capture_q_n_q(){}
 
 
 //Interface functions
-pub fn interface_menu(menu : &mut String) -> Option<Interface>{
+pub fn interface_menu(menu : &mut String,
+                      stdin : &mut io::Stdin,
+                      stdout : &mut io::Stdout) -> Option<Interface>{
 
     let interfaces: Vec<NetworkInterface> = get_interfaces();
     
@@ -153,7 +152,7 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
     loop{
 
         
-        interface_menu_text(&interface_opt, &mut option, &is_valid);
+        interface_menu_text(&interface_opt, &mut option, &is_valid, stdin, stdout);
 
         //check if user wants to return to previouos menu
         previous_menu(&option, menu); 
@@ -199,12 +198,13 @@ pub fn interface_menu(menu : &mut String) -> Option<Interface>{
         None => None 
     }
 
-
 }
 
 pub fn interface_menu_text(interfaces : &Vec<String>,
                                 input: &mut String,
-                                invalid_char : &bool){
+                                invalid_char : &bool,
+                                stdin : &mut io::Stdin,
+                                stdout : &mut io::Stdout){
 
     let mut propmt: String = String::new();
     propmt.clear();
@@ -215,12 +215,12 @@ pub fn interface_menu_text(interfaces : &Vec<String>,
                             spacer_size(25)).as_str());
 
     propmt.push_str(format!("Index{}Name{}MAC Addr{}Active{}IPv4{}IPv6 -> Link-Local\n",
-        spacer_size(4), spacer_size(9), spacer_size(12),
+        spacer_size(8), spacer_size(15), spacer_size(6),
         spacer_size(5), spacer_size(10)
     ).as_str());
 
     propmt
-        .push_str("----------------------------------------------------------------------------------------------\n\n");
+        .push_str("----------------------------------------------------------------------------------------------\n");
 
     for iface in interfaces.iter(){
         propmt.push_str(format!("{}\n", iface).as_str());
@@ -232,11 +232,14 @@ pub fn interface_menu_text(interfaces : &Vec<String>,
     if *invalid_char{
         propmt.push_str("Please choose a valid Index\n\n");
     }
-    print!("Enter a valid index ->");
 
-    io::stdout().flush().unwrap();
+    propmt.push_str("Enter a Valid Index -> ");
 
-    io::stdin().read_line(input)
+    write!(stdout, "{}", propmt).expect("Failed to write to stdout");
+
+    stdout.flush().unwrap();
+
+    stdin.read_line(input)
     .expect("Error reading input");
 
     clear_terminal();
@@ -272,21 +275,17 @@ pub fn get_interfaces() -> Vec<NetworkInterface>{
 pub fn interface_to_string(iface: &NetworkInterface) -> String{
     
     //mac address from interface
-    let mac_add = match iface.mac{
-
-        Some(mac) => mac,
-        None => MacAddr::zero(),
-    };  
+    let mac_add = iface.mac.unwrap_or_else(|| MacAddr::zero());
     
     //get interface index
     let index = iface.index;
 
-    //get name for interface if name if name > 8 shorten name
+    //get name for interface if name > 8 shorten name
     let name = get_of_iface_name(&iface.name);    
 
     //check if name is less than 8. If the name is less than 
     //8 all spaces to the name until it equals 8 spaces //space for name text
-    let spacer = get_name_space(&iface.name);
+    let name_space = get_name_space(&iface.name);
 
 
     //status if is up change status to up for false down
@@ -296,7 +295,27 @@ pub fn interface_to_string(iface: &NetworkInterface) -> String{
     let ipv6  =  get_ipv6(&iface.ips);
     let ipv4 = get_ipv4(&iface.ips);
 
-    format!("  {index}  |  {name} {spacer} | {mac} |  {status}  |   {ipv4}  |  {ipv6}", name = name, spacer= spacer, status = status, mac = mac_add, ipv4=ipv4, ipv6=ipv6)   
+    format!("{space_1}{index}{space_2}|{space_3}{name}{name_space}{space_4}|{space_5}{mac}{space_6}|\
+    {space_7}{status}{space_8}|{space_9}{ipv4}{space_10}|{space_11}{ipv6}",
+            space_1 = spacer_size(3),
+            index = index,
+            space_2 = spacer_size(3),
+            space_3 = spacer_size(5),
+            name = name,
+            name_space = name_space,
+            space_4 = spacer_size(2),
+            space_5 = spacer_size(2),
+            mac = mac_add,
+            space_6 = spacer_size(2),
+            space_7 = spacer_size(2),
+            status = status,
+            space_8 = spacer_size(2),
+            space_9 = spacer_size(2),
+            ipv4=ipv4,
+            space_10=spacer_size(3),
+            space_11=spacer_size(3),
+            ipv6=ipv6,
+            )
 }
 
 

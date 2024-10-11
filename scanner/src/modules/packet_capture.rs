@@ -11,24 +11,27 @@ use::std::io::{
     self,
     Write,
 };
-
-
-
+use crate::modules::export_to_file::ExportToTextFile;
 
 pub fn packet_capture(menu: &mut String){
 
     let mut  stdin = io::stdin();
+    let mut stdout = io::stdout();
+    let mut file = ExportToTextFile::new();
 
     //Packet capture main menu returns and interface
-    let iface_option: Option<Interface> = interface::interface_menu(menu);
+    let iface_option: Option<Interface> = interface::interface_menu(menu, &mut stdin, &mut stdout);
 
-    let mut traffic_filter = Filter::new();
+
+
+    let mut traffic_filter = Filter::new(&mut stdin, &mut stdout, &mut file);
 
     traffic_filter.filter_menu();
 
+
     if let Some(mut iface) = iface_option  {
 
-        iface.capture(traffic_filter);
+        iface.capture(&mut  traffic_filter);
 
     }
 

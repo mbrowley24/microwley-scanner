@@ -1,15 +1,16 @@
-
-
-use crate::modules::menu::{
-    clear_terminal,
-    input_validation_digit,
-    input_validation_digit_range,
-    parse_string_to_num_u32,
-    parse_string_to_num_selection_u16,
-    user_input,
-    spacer_size,
-    time_now
-
+use std::fs::File;
+use crate::modules::{
+    export_to_file::ExportToTextFile,
+    menu::{
+        clear_terminal,
+        input_validation_digit,
+        input_validation_digit_range,
+        parse_string_to_num_u32,
+        parse_string_to_num_selection_u16,
+        user_input,
+        spacer_size,
+        time_now
+    }
 };
 use pnet::packet::{
     arp::{
@@ -54,15 +55,18 @@ icmpv6::{
 };
 
 use regex::Regex;
-use std::io;
-use std::io::{Stdout, Write};
+use std::io::{self, Write};
 use pnet::packet::arp::ArpOperation;
 
-pub struct Filter{
+pub struct Filter<'a>{
     source_ipv4 : String,
     destination_ipv4 : String,
     source_ipv6: String,
     destination_ipv6 : String,
+    file : Option<&'a mut ExportToTextFile>,
+    stdin : &'a mut io::Stdin,
+    stdout : &'a mut io::Stdout,
+    pcap : bool,
     details: bool,
     s_port : u32,
     s_limit : u32,
@@ -85,22 +89,26 @@ pub struct Filter{
 }
 
 
-impl Filter{
+impl <'a>Filter<'a >{
 
     //creates struct to gather key data for packet capture capabilities
-    pub fn new() -> Self {
-        
+    pub fn new(stdin : &'a mut io::Stdin, stdout : &'a mut io::Stdout, file : &'a mut ExportToTextFile) -> Self {
+
 
         Self{
             source_ipv4: String::new(),
             destination_ipv4: String::new(),
             source_ipv6 : String::new(),
             destination_ipv6 : String::new(),
+            file : Some(file),
             details: false,
             s_port : 66000,
             d_port : 66000,
             s_limit: 60000,
             d_limit :60000,
+            stdin,
+            stdout,
+            pcap : true,
             arp : false,
             icmp : false,
             icmpv6: false,
@@ -121,21 +129,15 @@ impl Filter{
     }
 
 
-    pub fn capture_flow(&self, packet: &[u8]) {
+    pub fn capture_flow(&mut self, packet: &[u8]) {
 
         if let Some(frame) = EthernetPacket::new(packet) {
 
             //out holds the messages that will be displayed in the command line
             let mut output: String = String::new();
 
-            //standard output io
-            let mut stdout: io::Stdout = io::stdout();
 
-
-            self.capture_flow_layer2_details(&frame, &mut stdout);
-
-
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
 
             match frame.get_ethertype() {
                 EtherTypes::Ipv4 => {
@@ -143,7 +145,7 @@ impl Filter{
                         return
                     }
 
-                    self.capture_flow_ipv4(&frame, &mut stdout);
+                    self.capture_flow_ipv4(&frame);
                 },
 
                 EtherTypes::Ipv6 => {
@@ -151,14 +153,13 @@ impl Filter{
                         return
                     }
 
-                    self.capture_flow_ipv6(&frame, &mut stdout);
+                    self.capture_flow_ipv6(&frame);
                 },
 
 
-                EtherTypes::Arp => self.capture_flow_arp(&frame, &mut stdout),
+                EtherTypes::Arp => self.capture_flow_arp(&frame),
 
-                _ => {}
-                // }
+                _ => self.capture_flow_layer2_details(&frame)
             }
         }
     }
@@ -193,7 +194,7 @@ impl Filter{
         }
     }
 
-    fn capture_flow_arp(&self, frame: &EthernetPacket, stdout: &mut Stdout ) {
+    fn capture_flow_arp(&mut self, frame: &EthernetPacket) {
 
         if let Some(arp) = ArpPacket::new(frame.payload()) {
 
@@ -210,8 +211,8 @@ impl Filter{
             output.push_str(format!("Target protocol Address: {}\n", arp.get_target_proto_addr()).as_str());
             output.push_str("\n");
 
-            write!(stdout, "{}", output).unwrap();
-            stdout.flush().unwrap();
+            write!(self.stdout, "{}", output).unwrap();
+            self.stdout.flush().unwrap();
         }
     }
 
@@ -788,21 +789,23 @@ impl Filter{
     //IP menu asks user to IP version selection
     pub fn filter_menu(&mut self){
 
-        let mut stdout = io::stdout();
         let mut input = String::new();
         let mut message :String = String::from("Choose IP Version\n\nPress space or enter for both\n");
 
+        if let Some(ref mut file) = self.file{
+
+            file.create_new_file(self.stdin, self.stdout);
+
+        }
+
         message.push_str("\n1: IPv4\n2: IPv6\n-> ");
 
-        write!(stdout, "{}", message).unwrap();
+        write!(self.stdout, "{}", message).unwrap();
 
+        self.stdout.flush().unwrap();
 
-        stdout.flush().unwrap();
-
-        io::stdin().read_line(&mut input)
+        self.stdin.read_line(&mut input)
             .expect("Error in user input");
-
-
 
         //check out to check input
         if input == String::from("1") {
@@ -821,33 +824,33 @@ impl Filter{
         clear_terminal();
 
         input.clear();
-        self.ip_menu(&mut stdout, &mut input)
+        self.ip_menu(&mut input)
 
     }
 
-    pub fn ip_menu(&mut self, stdout : &mut io::Stdout, input : &mut String) {
+    pub fn ip_menu(&mut self, input : &mut String) {
 
         if self.ipv4 == false  && self.ipv6 == true{
 
-            self.source_ipv4_menu(stdout, input);
-            self.destination_ipv4_menu(stdout, input);
+            self.source_ipv4_menu(input);
+            self.destination_ipv4_menu(input);
 
         }else if self.ipv4 == true && self.ipv6 == false{
 
-            self.source_ipv6_menu(stdout, input);
-            self.destination_ipv6_menu(stdout, input);
+            self.source_ipv6_menu(input);
+            self.destination_ipv6_menu(input);
 
         }else{
 
-            self.source_ipv4_menu(stdout, input);
-            self.destination_ipv4_menu(stdout, input);
+            self.source_ipv4_menu(input);
+            self.destination_ipv4_menu(input);
 
-            self.source_ipv6_menu(stdout, input);
-            self.destination_ipv6_menu(stdout, input);
+            self.source_ipv6_menu(input);
+            self.destination_ipv6_menu(input);
         }
     }
 
-    pub fn source_ipv4_menu(&mut self, stdout : &mut io::Stdout, input : &mut String){
+    pub fn source_ipv4_menu(&mut self, input : &mut String){
 
         input.clear();
 
@@ -872,9 +875,9 @@ impl Filter{
                 prompt.push_str("Leave blank for all IPs\n\nSource IP (all)-> ");
             }
 
-            write!(stdout, "{}", prompt).unwrap();
+            write!(self.stdout, "{}", prompt).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
 
             io::stdin().read_line(input).expect("Error reading input");
 
@@ -899,7 +902,7 @@ impl Filter{
     //blank filter allows all IPs address
     //when a valid IP is entered all other IPs will
     //be filtered out
-    pub fn source_ipv6_menu(&mut self, stdout : &mut io::Stdout, input : &mut String){
+    pub fn source_ipv6_menu(&mut self, input : &mut String){
 
         input.clear();
 
@@ -924,9 +927,9 @@ impl Filter{
                 prompt.push_str("\nSource IP (All) ->");
             }
 
-            write!(stdout, "{}", prompt).unwrap();
+            write!(self.stdout, "{}", prompt).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
 
             io::stdin().read_line(input ).expect("Error in user input");
 
@@ -947,7 +950,7 @@ impl Filter{
 
     }
 
-    pub fn destination_ipv4_menu(&mut self, stdout : &mut io::Stdout, input : &mut String){
+    pub fn destination_ipv4_menu(&mut self, input : &mut String){
 
         input.clear();
 
@@ -973,8 +976,8 @@ impl Filter{
                 prompt.push_str("Leave blank for all IPs\n\nDestination IP (all)-> ");
             }
 
-            write!(stdout, "{}", prompt).unwrap();
-            stdout.flush().unwrap();
+            write!(self.stdout, "{}", prompt).unwrap();
+            self.stdout.flush().unwrap();
 
             io::stdin().read_line(input).expect("Error in user input");
 
@@ -995,7 +998,7 @@ impl Filter{
         clear_terminal();
     }
 
-    pub fn destination_ipv6_menu(&mut self, stdout : &mut io::Stdout, input : &mut String){
+    pub fn destination_ipv6_menu(&mut self, input : &mut String){
 
         input.clear();
         let mut is_valid : bool = true;
@@ -1022,9 +1025,9 @@ impl Filter{
 
 
 
-            write!(stdout, "{}", prompt).unwrap();
+            write!(self.stdout, "{}", prompt).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
 
             io::stdin().read_line(input).expect("Error reading input");
 
@@ -1338,16 +1341,16 @@ impl Filter{
 
     //IPV4 packet match to details of the packet or for short abbr traffic flow
 
-    fn capture_flow_ipv4(&self, frame: &EthernetPacket, stdout : &mut io::Stdout){
+    fn capture_flow_ipv4(&mut self, frame: &EthernetPacket){
 
         if let Some(packet) = Ipv4Packet::new(frame.payload()) {
 
 
             match self.details{
 
-                true => self.capture_flow_ipv4_details(&packet, stdout),
+                true => self.capture_flow_ipv4_details(&packet),
 
-                false => self.capture_flow_ipv4_abbr(&packet, stdout),
+                false => self.capture_flow_ipv4_abbr(&packet),
             }
 
 
@@ -1356,22 +1359,22 @@ impl Filter{
     }
 
     //short abbreviated layer 3 traffic flow
-    fn capture_flow_ipv4_abbr(&self, packet : &Ipv4Packet, stdout : &mut io::Stdout){
+    fn capture_flow_ipv4_abbr(&mut self, packet : &Ipv4Packet){
 
         match packet.get_next_level_protocol() {
 
 
             IpNextHeaderProtocols::Icmp =>{
 
-                self.capture_flow_icmp_ipv4(packet, stdout);
+                self.capture_flow_icmp_ipv4(packet);
             },
             IpNextHeaderProtocols::Tcp =>{
 
-                self.capture_flow_tcp_ipv4_abbr(packet, stdout);
+                self.capture_flow_tcp_ipv4_abbr(packet);
             },
             IpNextHeaderProtocols::Udp =>{
 
-                self.capture_flow_udp_ipv4_abbr(packet, stdout);
+                self.capture_flow_udp_ipv4_abbr(packet);
             }
             _=> println!("Unhandled packet: Here Here")
         }
@@ -1379,7 +1382,7 @@ impl Filter{
     }
 
     //ipv4 capture output with details
-    fn capture_flow_ipv4_details(&self, packet : &Ipv4Packet, stdout : &mut io::Stdout){
+    fn capture_flow_ipv4_details(&mut self, packet : &Ipv4Packet){
 
         //checks to see if ipv4 is filtered
         //if marked true for filter return out of function
@@ -1390,11 +1393,11 @@ impl Filter{
 
         match packet.get_next_level_protocol() {
 
-            IpNextHeaderProtocols::Icmp => self.capture_flow_icmp_ipv4(&packet, stdout),
+            IpNextHeaderProtocols::Icmp => self.capture_flow_icmp_ipv4(&packet),
 
-            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv4(&packet, stdout),
+            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv4(&packet),
 
-            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv4(&packet, stdout),
+            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv4(&packet),
             _=> println!()
 
         }
@@ -1409,7 +1412,7 @@ impl Filter{
 
 
     //ipv4 icmp output
-    fn capture_flow_icmp_ipv4(&self, packet : &Ipv4Packet, stdout : &mut io::Stdout){
+    fn capture_flow_icmp_ipv4(&mut self, packet : &Ipv4Packet){
 
 
         if let Some(icmp) = IcmpPacket::new(packet.payload()){
@@ -1423,15 +1426,22 @@ impl Filter{
             output.push_str(format!("{} --> {}\n", packet.get_source(), packet.get_destination()).as_str());
             output.push_str(format!("{}  {}\n", icmp_type_code[0], icmp_type_code[1]).as_str());
 
-            write!(stdout, "{}", output).unwrap();
+            write!(self.stdout, "{}", output).unwrap();
 
-            stdout.flush().unwrap();
+            if let Some(ref mut file) = self.file{
+
+                 file.write_to_file(output.as_str(), self.stdin, self.stdout)
+            }
+
+            self.stdout.flush().unwrap();
+
+
 
         }
     }
 
     //tcp ipv4 output
-    fn capture_flow_tcp_ipv4(&self, packet : &Ipv4Packet, stdout : &mut io::Stdout){
+    fn capture_flow_tcp_ipv4(&mut self, packet : &Ipv4Packet){
 
         if let Some(segment) = TcpPacket::new(packet.payload()){
 
@@ -1451,13 +1461,13 @@ impl Filter{
             output.push_str(format!("\x1b[1mDestination Address:\x1b[0m {}:{}\n",
                                     packet.get_destination(), segment.get_destination()).as_str());
 
-            write!(stdout, "{}", output).unwrap();
+            write!(self.stdout, "{}", output).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
         }
     }
 
-    fn capture_flow_tcp_ipv4_abbr(&self, packet : &Ipv4Packet, stdout : &mut io::Stdout){
+    fn capture_flow_tcp_ipv4_abbr(&mut self, packet : &Ipv4Packet){
 
         if let Some(segment) = TcpPacket::new(packet.payload()){
 
@@ -1474,15 +1484,15 @@ impl Filter{
                                     packet.get_destination(),
                                     segment.get_destination()).as_str());
 
-            write!(stdout, "{}", output).unwrap();
+            write!(self.stdout, "{}", output).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
         }
     }
 
 
     //output fpr udp capture
-    pub fn capture_flow_udp_ipv4(&self, packet : &Ipv4Packet, stdout : &mut io::Stdout){
+    pub fn capture_flow_udp_ipv4(&mut self, packet : &Ipv4Packet){
 
         if let Some(segment) = UdpPacket::new(packet.payload()){
             let mut output : String = String::new();
@@ -1494,14 +1504,14 @@ impl Filter{
                                     segment.get_destination()).as_str());
             output.push_str(format!("Length: {}\n", packet.payload().len()).as_str());
 
-            write!(stdout, "{}", output).unwrap();
-            stdout.flush().unwrap();
+            write!(self.stdout, "{}", output).unwrap();
+            self.stdout.flush().unwrap();
                
         }
     }
 
 
-    fn capture_flow_udp_ipv4_abbr(&self, packet : &Ipv4Packet, stdout : &mut io::Stdout){
+    fn capture_flow_udp_ipv4_abbr(&mut self, packet : &Ipv4Packet){
 
         if let Some(segment) = UdpPacket::new(packet.payload()){
 
@@ -1515,16 +1525,16 @@ impl Filter{
                                     packet.get_destination(),
                                     segment.get_destination()).as_str());
 
-            write!(stdout, "{}", output).unwrap();
+            write!(self.stdout, "{}", output).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
 
         }
     }
 
 
     //ipv6 capture output
-    fn capture_flow_ipv6(&self, frame : &EthernetPacket, stdout : &mut io::Stdout){
+    fn capture_flow_ipv6(&mut self, frame : &EthernetPacket){
 
         if self.icmpv6 == true {
             return;
@@ -1533,39 +1543,39 @@ impl Filter{
         if let Some(packet) = Ipv6Packet::new(frame.payload()){
             match self.details{
 
-                true => self.capture_flow_ipv6_details(&packet,  stdout),
+                true => self.capture_flow_ipv6_details(&packet),
 
-                false => self.capture_flow_ipv6_abbr(&packet, stdout),
+                false => self.capture_flow_ipv6_abbr(&packet),
             }
         }
 
     }
 
-    fn capture_flow_ipv6_abbr(&self, packet :&Ipv6Packet, stdout : &mut io::Stdout){
+    fn capture_flow_ipv6_abbr(&mut self, packet :&Ipv6Packet){
 
         match packet.get_next_header(){
-            IpNextHeaderProtocols::Icmpv6 => self.capture_flow_icmp_ipv6(packet, stdout),
-            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6_abbr(packet, stdout),
-            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6_abbr(packet, stdout),
+            IpNextHeaderProtocols::Icmpv6 => self.capture_flow_icmp_ipv6(packet),
+            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6_abbr(packet),
+            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6_abbr(packet),
             _=> {}
         }
 
     }
 
-    fn capture_flow_ipv6_details(&self, packet : &Ipv6Packet, stdout : &mut io::Stdout){
+    fn capture_flow_ipv6_details(&mut self, packet : &Ipv6Packet){
 
         match packet.get_next_header() {
 
-            IpNextHeaderProtocols::Icmpv6 => self.capture_flow_icmp_ipv6(packet, stdout),
-            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6_details(packet, stdout),
-            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6_details(packet, stdout),
+            IpNextHeaderProtocols::Icmpv6 => self.capture_flow_icmp_ipv6(packet),
+            IpNextHeaderProtocols::Tcp => self.capture_flow_tcp_ipv6_details(packet),
+            IpNextHeaderProtocols::Udp => self.capture_flow_udp_ipv6_details(packet),
 
             _=> {}
         }
 
     }
 
-    fn capture_flow_icmp_ipv6(&self, packet : &Ipv6Packet, stdout : &mut io::Stdout){
+    fn capture_flow_icmp_ipv6(&mut self, packet : &Ipv6Packet){
 
         if let Some(icmp) = Icmpv6Packet::new(packet.payload()){
             let mut output : String = String::new();
@@ -1579,14 +1589,14 @@ impl Filter{
             output.push_str(format!("{}  {}\n", icmp_type_code[0], icmp_type_code[1]).as_str());
             output.push_str("\n");
 
-            write!(stdout, "{}", output).unwrap();
-            stdout.flush().unwrap();
+            write!(self.stdout, "{}", output).unwrap();
+            self.stdout.flush().unwrap();
 
         }
 
     }
 
-    fn capture_flow_tcp_ipv6_abbr(&self, packet : &Ipv6Packet, stdout : &mut io::Stdout){
+    fn capture_flow_tcp_ipv6_abbr(&mut self, packet : &Ipv6Packet){
 
 
         if let Some(segment) = TcpPacket::new(packet.payload()){
@@ -1601,14 +1611,14 @@ impl Filter{
                                     segment.get_destination()).as_str());
             output.push_str("\n");
 
-            write!(stdout, "{}", output).unwrap();
-            stdout.flush().unwrap();
+            write!(self.stdout, "{}", output).unwrap();
+            self.stdout.flush().unwrap();
 
         }
     }
 
     //ipv6 TCP output
-    fn capture_flow_tcp_ipv6_details(&self, packet : &Ipv6Packet, stdout : &mut io::Stdout){
+    fn capture_flow_tcp_ipv6_details(&mut self, packet : &Ipv6Packet){
 
         if let Some(segment) = TcpPacket::new(packet.payload()){
 
@@ -1632,15 +1642,15 @@ impl Filter{
                                     packet.get_destination(), segment.get_destination()).as_str());
             output.push_str("\n");
 
-            write!(stdout, "{}", output).unwrap();
+            write!(self.stdout, "{}", output).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
             
         }
     }
 
 
-    fn capture_flow_udp_ipv6_abbr(&self,packet : &Ipv6Packet, stdout : &mut io::Stdout){
+    fn capture_flow_udp_ipv6_abbr(&mut self,packet : &Ipv6Packet){
 
 
 
@@ -1658,13 +1668,13 @@ impl Filter{
                                     segment.get_destination()).as_str());
             output.push_str("\n");
 
-            write!(stdout, "{}", output).unwrap();
-            stdout.flush().unwrap();
+            write!(self.stdout, "{}", output).unwrap();
+            self.stdout.flush().unwrap();
         }
     }
 
     //ipv6 output flow
-    fn capture_flow_udp_ipv6_details(&self,packet : &Ipv6Packet, stdout: &mut io::Stdout){
+    fn capture_flow_udp_ipv6_details(&mut self, packet : &Ipv6Packet){
 
 
 
@@ -1690,9 +1700,9 @@ impl Filter{
 
             output.push_str("\n");
 
-            write!(stdout, "{}", output).unwrap();
+            write!(self.stdout, "{}", output).unwrap();
 
-            stdout.flush().unwrap();
+            self.stdout.flush().unwrap();
 
         }
     }
@@ -1700,7 +1710,7 @@ impl Filter{
 
 
 
-    fn capture_flow_layer2_details(&self, frame : &EthernetPacket, stdout : &mut io::Stdout){
+    fn capture_flow_layer2_details(&mut self, frame : &EthernetPacket){
 
 
         let mut output : String = String::new();
@@ -1720,8 +1730,8 @@ impl Filter{
                                 self.layer2_source_destination(&frame)).as_str());
 
         output.push_str("\n");
-        write!(stdout, "{}", output).unwrap();
-        stdout.flush().unwrap();
+        write!(self.stdout, "{}", output).unwrap();
+        self.stdout.flush().unwrap();
 
     }
 

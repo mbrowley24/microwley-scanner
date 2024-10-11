@@ -1,6 +1,8 @@
 use std::{
     fs::File,
-    io::{self, Error, Write},
+    io,
+    io::Write,
+    mem::drop,
     path::Path
 };
 
@@ -8,14 +10,16 @@ use crate::modules::menu;
 use crate::modules::menu::user_input;
 
 pub struct ExportToTextFile {
-
     file : Option<File>,
 }
 
 
 impl ExportToTextFile {
     pub fn new() -> Self {
-        Self
+
+        Self{
+            file : None
+        }
     }
 
 
@@ -23,113 +27,102 @@ impl ExportToTextFile {
         //hoisted variable
 
         //prompt to provide the user instruction
-        let prompt : String = String::from("Enter a valid file name");
-        let mut overwrite : bool = false;
-        let overwrite_prompt = String::from("Overwrite existing file? (y/n) \n\n");
+        let prompt : String = String::from("Save packet capture file\n\nenter a valid file name ->");
 
         //input from the user
-        let mut input : String = String::new();
-
-        //number to change file name if duplicate
-        let mut file_number : usize = 0;
-
-        //user provided file name
-        io::stdin().read_line(&mut input)
-            .expect("Unable to take user input");
-
-        //path / file name for new file
-        let mut  path: &Path = Path::new(prompt.as_str());
-
-        //check if the path exists
-        let name_exists: bool = path.exists();
+        let mut input : [String; 2] = [String::new(), String::new()];
 
         // if a file is name exists prompt user to overwrite
-        if name_exists == true {
+        let mut file_count : usize = 1;
 
-            // input for user option
-            let mut overwrite_file = String::new();
+        write!(stdout, "{}", prompt).unwrap();
+        stdout.flush().unwrap();
 
-            //prompt for asking the user if they want to overwrite string
-            write!(stdout, "{}", overwrite_prompt)
-                .expect("Unable to write to stdin");
+        //user provided file name
+        stdin.read_line(&mut input[0])
+            .expect("Unable to take user input");
 
-            //display to user
-            stdout.flush().expect("Unable to flush stdout");
 
-            //user input y gets the user to overwrite
-            io::stdin().read_line(&mut overwrite_file).expect("Unable to take user input");
+        input[0] = input[0].replace("\n","");
 
-            //if user selects yes set overwrite to true
-            if overwrite_file != String::from("y") {
 
-                overwrite = true;
+        if input[0].ends_with(".txt"){
 
-            }
-        }
+            input[1] = input[0].clone();
 
-        //if overwrite is false, get create another unique, ex if file is taken file(1)
-        //maybe available if not the number will increment until a unique name is found
-        if overwrite == false {
+            input[0] = input[0].replace(".txt", "");
 
-            //check if file currently exists in current work directory
-            while path.exists(){
+        }else{
 
-                //increment the number to change file name
-                file_number += 1;
+            input[1] = input[0].clone();
 
-                //new file name
-                let new_file_name = format!("{}({}).txt", prompt, file_number);
-
-                //reset
-                path = Path::new(new_file_name.as_str());
-            }
+            input[1] = input[1].replace(".txt", "");
         }
 
 
-        //turn the path into a string
-        let path_string = match path.to_str(){
+        //check if file name has a value if not assign a value of capture
+        if input[0].trim().len() == 0 {
 
-            Ok(path) => path,
+            input[0].clear();
 
-            Err(e) => e
+            input[0].push_str("capture");
+            input[1].push_str("capture.txt");
 
-        };
+        }
 
-        //create Option for file
-        match File::create(path_string){
+        //set file path
+        let mut  path: &Path = Path::new(input[1].as_str());
+
+
+
+        //loop to change name if already exists
+        while path.exists() == true {
+
+            input[1].clear();
+
+            input[1] = String::from(format!("{}({}).txt", input[0], file_count));
+
+            path = Path::new(&input[1]);
+
+            file_count += 1;
+        }
+
+        //handle path to create file
+        match File::create(input[1].as_str()) {
+
             Ok(file) => self.file = Some(file),
             Err(e) => self.file =  None,
+
         };
+
     }
 
-    pub fn save_file(&mut self)  {
-        let mut stdout = io::stdout();
+    //Write to and print to screen the amount of bytes saved in file
+    pub fn write_to_file(&mut self, text : &str, stdin : &mut io::Stdin, stdout : &mut io::Stdout) {
 
-        let mut prompt : String = String::from("Save output to local file\nfile name ->");
+        if let Some(ref mut file) = self.file {
 
+            match file.write(text.as_bytes()){
 
-        loop {
-            writeln!(&mut stdout, "{}", prompt.as_str())
-                .expect("Unable to write prompt");
+                Ok(bytes_save) =>{
 
-            io::stdin().read_line(&mut prompt)
-                .expect("Unable to read prompt");
+                    let saved_message = format!("Successfully wrote {} bytes to file: ", bytes_save);
 
-            self.file_exists()
+                    write!(stdout, "{}", saved_message).unwrap();
+                    stdout.flush().unwrap();
 
+                },
 
+                Err(e) => eprintln!("Unable to write to file: {}", e),
+            }
         }
 
     }
 
+    pub fn close_file(self) {
 
-    pub fn write_to_file(&self){
-
-    }
-
-    pub fn file_exists(&mut self){
-
-
-
+        if let Some(file) = self.file {
+            drop(file)
+        }
     }
 }

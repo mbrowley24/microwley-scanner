@@ -274,6 +274,17 @@ impl <'a>Filter<'a >{
         
     }
 
+
+    fn format_protocol(&self, message : &str) -> String {
+
+        format!("\x1b[91;1m{}\x1b[0m", message)
+    }
+
+    fn format_ip(&self, message : [String;3]) -> String {
+
+        format!("{}\x1b[91;1m-->\x1b[0m{}", message[0], message[1])
+    }
+
     //ICMP code format
     fn icmp_code_format(&self, packet: &IcmpPacket, message : String) -> String{
         format!("{:?}: {}", packet.get_icmp_code(), message)
@@ -1418,24 +1429,29 @@ impl <'a>Filter<'a >{
         if let Some(icmp) = IcmpPacket::new(packet.payload()){
 
             let mut output = String::new();
+            let mut file_text = String::new();
 
             let icmp_type_code : [String;2] = self.icmp_type_and_code(&icmp);
 
-            output.push_str("\x1b[91;1mICMP:\x1b[0m");
-            output.push_str(format!("Packet Length: {}\n", icmp.payload().len()).as_str());
-            output.push_str(format!("{} --> {}\n", packet.get_source(), packet.get_destination()).as_str());
+            output.push_str(format!("\x1b[91;1mICMP{}\x1b[0m", spacer_size(2)).as_str());
+            output.push_str(format!("Packet Length: {} ", icmp.payload().len()).as_str());
+            output.push_str(format!("{} --> {}", packet.get_source(), packet.get_destination()).as_str());
             output.push_str(format!("{}  {}\n", icmp_type_code[0], icmp_type_code[1]).as_str());
+
+            file_text.push_str(format!("{}{}", time_now(), spacer_size(2)).as_str());
+            file_text.push_str(format!("ICMP{}", spacer_size(2)).as_str());
+            file_text.push_str(format!("Packet Length:{}{}", icmp.payload().len(), spacer_size(2)).as_str());
+            file_text.push_str(format!("{} --> {}", packet.get_source(), packet.get_destination()).as_str());
+            file_text.push_str(format!("{}{}  {}\n", spacer_size(2), icmp_type_code[0], icmp_type_code[1]).as_str());
 
             write!(self.stdout, "{}", output).unwrap();
 
             if let Some(ref mut file) = self.file{
 
-                 file.write_to_file(output.as_str(), self.stdin, self.stdout)
+                 file.write_to_file(file_text.as_str(), self.stdin, self.stdout)
             }
 
             self.stdout.flush().unwrap();
-
-
 
         }
     }
@@ -1446,7 +1462,7 @@ impl <'a>Filter<'a >{
         if let Some(segment) = TcpPacket::new(packet.payload()){
 
             let mut output : String = String::new();
-            output.push_str("\x1b[91;1mTCP:\x1b[0m\n");
+            output.push_str("\x1b[91;1mTCP\x1b[0m\n");
             output.push_str("\x1b[91;1mInternet Protocol Version 4:\x1b[0m\n");
             output.push_str("\x1b[1mVersion\x1b[0m: 4\n");
             output.push_str(format!("\x1b[1mHeader Length\x1b[0m: {}\n", packet.get_header_length()).as_str());
@@ -1472,19 +1488,41 @@ impl <'a>Filter<'a >{
         if let Some(segment) = TcpPacket::new(packet.payload()){
 
             let mut output : String = String::new();
-            output.push_str("\x1b[91;1mInternet Protocol Version 4:\x1b[0m\n");
-            output.push_str(format!("\x1b[1mTime to Live\x1b[0m: {}\n", packet.get_ttl()).as_str());
-            output.push_str(format!("\x1b[1mProtocol\x1b[0m: {}\n",
+            let mut file_output : String = String::new();
+
+            output.push_str(format!("\x1b[91;1m{}\x1b[0m\n", time_now()).as_str());
+            output.push_str(format!("\x1b[1m{}\x1b[0m:",
                                     self.layer_4_protocol(packet.get_next_level_protocol())).as_str());
-            output.push_str(format!("\x1b[1mFlags\x1b[0m: {}\n",
-                                    self.tcp_flag(packet.get_flags())).as_str());
-            output.push_str(format!("{}:{} --> {}:{}\n",
+            output.push_str(format!("{}:{} --> {}:{}",
                                     packet.get_source(),
                                     segment.get_source(),
                                     packet.get_destination(),
                                     segment.get_destination()).as_str());
+            output.push_str(format!("\x1b[1mFlags\x1b[0m: {}",
+                                    self.tcp_flag(packet.get_flags())).as_str());
+            output.push_str(format!("\x1b[1mTime to Live\x1b[0m: {}\n", packet.get_ttl()).as_str());
+
+            file_output.push_str(format!("{}{}", time_now(), spacer_size(2)).as_str());
+            file_output.push_str(format!("{}{}",
+                                    self.layer_4_protocol(packet.get_next_level_protocol()),
+                                    spacer_size(3)).as_str());
+            file_output.push_str(format!("{}:{} --> {}:{}",
+                                    packet.get_source(),
+                                    segment.get_source(),
+                                    packet.get_destination(),
+                                    segment.get_destination()).as_str());
+            file_output.push_str(format!("{}Flags:{}{}", spacer_size(2),
+                                         self.tcp_flag(packet.get_flags()),
+                                         spacer_size(2)).as_str());
+            file_output.push_str(format!("Time to Live:{}\n",packet.get_ttl()).as_str());
+
 
             write!(self.stdout, "{}", output).unwrap();
+
+            if let Some(ref mut file) = self.file{
+
+                file.write_to_file(file_output.as_str(), self.stdin, self.stdout)
+            }
 
             self.stdout.flush().unwrap();
         }
@@ -1496,6 +1534,8 @@ impl <'a>Filter<'a >{
 
         if let Some(segment) = UdpPacket::new(packet.payload()){
             let mut output : String = String::new();
+            let mut file_text = String::new();
+
             output.push_str("\x1b[91;1mUDP:\x1b[0m\n");
             output.push_str(format!("Timestamp: {}\n", time_now()).as_str());
             output.push_str(format!("Source: {}:{}",
@@ -1504,9 +1544,22 @@ impl <'a>Filter<'a >{
                                     segment.get_destination()).as_str());
             output.push_str(format!("Length: {}\n", packet.payload().len()).as_str());
 
+            file_text.push_str(format!("{}{}", time_now(), spacer_size(2)).as_str());
+            file_text.push_str(format!("UDP:{}", spacer_size(3)).as_str());
+            file_text.push_str(format!("{}:{} --> {}:{}",
+                                         packet.get_source(),
+                                         segment.get_source(),
+                                         packet.get_destination(),
+                                         segment.get_destination()).as_str());
+            file_text.push_str(format!("Length:{}", packet.payload().len()).as_str());
+
+
             write!(self.stdout, "{}", output).unwrap();
             self.stdout.flush().unwrap();
-               
+
+            if let Some(ref mut file) = self.file{
+                file.write_to_file(file_text.as_str(), self.stdin, self.stdout)
+            }
         }
     }
 
@@ -1516,18 +1569,36 @@ impl <'a>Filter<'a >{
         if let Some(segment) = UdpPacket::new(packet.payload()){
 
             let mut output : String = String::new();
-            output.push_str("\x1b[91;1mUDP:\x1b[0m\n");
-            output.push_str("Version 4\n");
-            output.push_str(format!("Length: {}\n",  packet.get_total_length()).as_str());
+            let mut file_output = String::new();
+
+            output.push_str(format!("\x1b[91;1mUDP{}\x1b[0m", spacer_size(3)).as_str());
+            //output.push_str("Version 4\n");
             output.push_str(format!("{}:{} --> {}:{}",
                                     packet.get_source(),
                                     segment.get_source(),
                                     packet.get_destination(),
                                     segment.get_destination()).as_str());
+            output.push_str(format!("Length: {}\n",  packet.get_total_length()).as_str());
+
+
+            file_output.push_str(format!("{}{}", time_now(), spacer_size(2)).as_str());
+            file_output.push_str(format!("UDP{}", spacer_size(2)).as_str());
+            file_output.push_str(format!("{}:{} --> {}:{}{}",
+                                    packet.get_source(),
+                                    segment.get_source(),
+                                    packet.get_destination(),
+                                    segment.get_destination(),
+                                    spacer_size(2)).as_str());
+            file_output.push_str(format!("Length:{}\n",  packet.get_total_length()).as_str());
+
 
             write!(self.stdout, "{}", output).unwrap();
 
             self.stdout.flush().unwrap();
+
+            if let Some(ref mut file) = self.file{
+                file.write_to_file(file_output.as_str(), self.stdin, self.stdout)
+            }
 
         }
     }
@@ -1582,12 +1653,12 @@ impl <'a>Filter<'a >{
 
             let icmp_type_code : [String;2] = self.icmp6_type_and_code(&icmp);
 
-            output.push_str("\x1b[91;1mICMP:\x1b[0m\n");
-            output.push_str(format!("Packet Length: {}\n", icmp.payload().len()).as_str());
-            output.push_str(format!("{} --> {}\n",
+            output.push_str(format!("{}{}", time_now(), spacer_size(2)).as_str());
+            output.push_str("\x1b[91;1mICMP:\x1b[0m");
+            output.push_str(format!("{} --> {}",
                                     packet.get_source(), packet.get_destination()).as_str());
-            output.push_str(format!("{}  {}\n", icmp_type_code[0], icmp_type_code[1]).as_str());
-            output.push_str("\n");
+            output.push_str(format!("{}  {}", icmp_type_code[0], icmp_type_code[1]).as_str());
+            output.push_str(format!("Packet Length: {}\n", icmp.payload().len()).as_str());
 
             write!(self.stdout, "{}", output).unwrap();
             self.stdout.flush().unwrap();
@@ -1602,8 +1673,7 @@ impl <'a>Filter<'a >{
         if let Some(segment) = TcpPacket::new(packet.payload()){
             let mut output : String = String::new();
 
-            output.push_str("\x1b[91;1mTCP:\x1b[0m\n");
-            output.push_str("version 6:\n");
+            output.push_str(format!("\x1b[91;1mTCP{}\x1b[0m", spacer_size(2)).as_str());
             output.push_str(format!("\x1b[1m[ {} ]\x1b[0m:{} --> \x1b[1m[ {} ]\x1b[0m:{}",
                                     packet.get_source(),
                                     segment.get_source(),
@@ -1653,22 +1723,30 @@ impl <'a>Filter<'a >{
     fn capture_flow_udp_ipv6_abbr(&mut self,packet : &Ipv6Packet){
 
 
-
         if let Some(segment) = UdpPacket::new(packet.payload()){
 
+            let mut display : String = String::new();
             let mut output : String = String::new();
 
-            output.push_str("\x1b[91;1mUDP\x1b[0m\n");
-            output.push_str("version 6\n");
-            output.push_str(format!("Packet Length: {}\n", segment.get_length()).as_str());
-            output.push_str(format!("\x1b[1m[ {} ]\x1b[0m:{} --> \x1b[1m[ {} ]\x1b[0m:{}\n",
+            display.push_str(format!("\x1b[91;1mUDP{}\x1b[0m", spacer_size(2)).as_str());
+
+            output.push_str(format!("UDP{}", spacer_size(2)).as_str());
+
+            display.push_str(format!("\x1b[1m[ {} ]\x1b[0m:{} --> \x1b[1m[ {} ]\x1b[0m:{}",
                                     packet.get_source(),
                                     segment.get_source(),
                                     packet.get_destination(),
                                     segment.get_destination()).as_str());
-            output.push_str("\n");
 
-            write!(self.stdout, "{}", output).unwrap();
+            output.push_str(format!("[ {} ]{} --> [ {} ]{}",
+                                   packet.get_source(),
+                                   segment.get_source(),
+                                   packet.get_destination(),
+                                   segment.get_destination()).as_str());
+
+            display.push_str(format!("Packet Length: {}\n", segment.get_length()).as_str());
+            output.push_str(format!("Packet Length: {}\n", segment.get_length()).as_str());
+            write!(self.stdout, "{}", display).unwrap();
             self.stdout.flush().unwrap();
         }
     }

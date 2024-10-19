@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::modules::menu;
-use crate::modules::menu::user_input;
+use crate::modules::menu::{clear_terminal, user_input};
 
 pub struct ExportToTextFile {
     file : Option<File>,
@@ -27,7 +27,7 @@ impl ExportToTextFile {
         //hoisted variable
 
         //prompt to provide the user instruction
-        let prompt : String = String::from("Save packet capture file\n\nenter a valid file name ->");
+        let prompt : String = String::from("Save packet capture file\n\nenter a valid file name -> ");
 
         //input from the user
         let mut input : [String; 2] = [String::new(), String::new()];
@@ -70,7 +70,7 @@ impl ExportToTextFile {
 
         }
 
-        //set file path
+        //set file path name from string
         let mut  path: &Path = Path::new(input[1].as_str());
 
 
@@ -95,6 +95,8 @@ impl ExportToTextFile {
 
         };
 
+        clear_terminal();
+
     }
 
     //Write to and print to screen the amount of bytes saved in file
@@ -106,7 +108,7 @@ impl ExportToTextFile {
 
                 Ok(bytes_save) =>{
 
-                    let saved_message = format!("Successfully wrote {} bytes to file: ", bytes_save);
+                    let saved_message = format!("Successfully wrote {} bytes to file: \n", bytes_save);
 
                     write!(stdout, "{}", saved_message).unwrap();
                     stdout.flush().unwrap();

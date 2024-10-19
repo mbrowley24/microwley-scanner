@@ -88,50 +88,7 @@ impl Interface{
 }
 
 
-// fn capture_flow(packet: &[u8], filter : &packet_filter){
 
-//     if let Some(frame) = EthernetPacket::new(packet){
-
-//           match frame.get_ethertype(){
-
-//             EtherTypes::Ipv4 => capture_flow_ipv4(frame, &filter),
-
-//             EtherTypes::Ipv6 => capture_flow_ipv6(frame),
-        
-//             EtherTypes::Arp => capture_flow_arp(),
-
-//             EtherTypes::Vlan => capture_flow_vlan(),
-
-//             EtherTypes::Lldp => capture_flow_lldp(),
-            
-//             EtherTypes::QinQ => capture_q_n_q(),
-
-//             _ => {
-//                 capture_flow_layer2(frame);
-//             }
-//         }
-//     }
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-fn capture_flow_arp(){}
-
-fn capture_flow_vlan(){}
-
-fn capture_flow_lldp(){}
-
-fn capture_q_n_q(){}
 
 
 //Interface functions

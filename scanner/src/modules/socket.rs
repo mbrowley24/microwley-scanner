@@ -27,22 +27,41 @@ const INTERFACE_NAME: &str = "enp1s0"; // Change to your desired interface
 
 fn decode_tcp_segment(segment: &[u8]){
 
-      if segment.len() < 20 {
+      if segment.len() < 14 {
             println!("Segment too short");
             return;
       }
+      println!("{:?}", &segment[0..6]);
+      // **LAYER 2: Ethernet Header**
+      let dest_mac = segment[0..6];
+      let src_mac = segment[6..12];
+      let ethertype = u16::from_be_bytes([segment[12], segment[13]]);
 
+      println!("🔹 Layer 2 - Ethernet");
+      println!("   📡 Destination MAC: {}", mac_address_formatter(dest_mac));
+      println!("   🎯 Source MAC: {}", mac_address_formatter(src_mac));
+      println!("   🔗 EtherType: {:#06x}", ethertype);
+      println!("read {:?} segment", segment[0]);
       let src_port = u16::from_be_bytes([segment[0], segment[1]]);
       let dst_port = u16::from_be_bytes([segment[2], segment[3]]);
       let seq_num = u32::from_be_bytes([segment[4], segment[5], segment[6], segment[7]]);
       let ack_num = u32::from_be_bytes([segment[8], segment[9], segment[10], segment[11]]);
 
+      // println!("🔹 Destination MAC: {:02x?}", dest_mac);
+      // println!("🔹 Source MAC: {:02x?}", src_mac);
       println!("🔹 Source Port: {}", src_port);
       println!("🔹 Destination Port: {}", dst_port);
       println!("📌 Sequence Number: {}", seq_num);
       println!("📌 Acknowledgment Number: {}", ack_num);
 }
 
+fn mac_address_formatter(mac_address : &[u8]) -> String{
+
+      mac_address.iter()
+          .map(|x| format!("{:02x}", x))
+          .collect::<Vec<String>>()
+          .join(":")
+}
 
 pub fn start_sniffer() -> io::Result<()> {
 
@@ -76,7 +95,8 @@ pub fn start_sniffer() -> io::Result<()> {
 
             addr.sll_protocol = (ETH_P_ALL as u16).to_be();
 
-            addr.sll_ifindex = iface_index as i32;
+            //replace with an input
+            addr.sll_ifindex = 2;
 
 
 
@@ -125,7 +145,6 @@ pub fn start_sniffer() -> io::Result<()> {
                         println!("Captured packet: {} bytes", received);
 
                         decode_tcp_segment(&buffer[..received as usize]);
-                        //print_packet(&buffer[..received as usize]);
 
                       }
 

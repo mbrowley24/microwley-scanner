@@ -1,8 +1,10 @@
-mod modules {
-    pub mod socket;
-}
+mod mbcap;
+
 use libc::if_nametoindex;
 use std::ffi::CString;
+
+
+
 
 fn main() {
 
@@ -21,7 +23,7 @@ fn main() {
     let if_index = get_interface_index("enp1s0").expect("shit"); // Change this to your interface index (use `ip link` to find it)
 
     println!("this index of {}", if_index);
-    modules::socket::start_sniffer().expect("Failed to create AF_XDP modules");
+
 
     println!("AF_XDP Packet Sniffer started...");
     // modules::socket::receive_packets(fd);

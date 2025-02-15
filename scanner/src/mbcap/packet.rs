@@ -13,6 +13,8 @@ impl EthernetData {
     }
     pub fn get_ethernet(&self) -> &[u8] {
         &self.ethernet_frame
+
+
     }
 
     pub fn get_packet(&self, packet : &[u8]) -> &[u8] {
